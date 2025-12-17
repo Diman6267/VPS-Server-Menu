@@ -15,49 +15,73 @@ function show_menu {
     echo -e "${CYAN}======================================================${NC}"
     
     # --- БЛОК ОТОБРАЖЕНИЯ ХАРАКТЕРИСТИК ---
-    UPTIME=$(uptime -p)
-    
+    # --- СБОР ДАННЫХ В СТИЛЕ BENCH.SH ---
     # CPU
     if command -v lscpu &> /dev/null; then
-        CPU_MODEL=$(lscpu 2>/dev/null | grep 'Model name:' | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//' -e 's/([^)]*)//g' -e 's/[[:space:]]*$//')
+        CPU_MODEL=$(lscpu 2>/dev/null | grep 'Model name:' | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//')
         CPU_CORES=$(nproc)
-    elif [ -f "/proc/cpuinfo" ]; then
-        CPU_MODEL=$(grep 'model name' /proc/cpuinfo | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//' -e 's/([^)]*)//g' -e 's/[[:space:]]*$//')
-        CPU_CORES=$(grep -c processor /proc/cpuinfo)
+        CPU_FREQ=$(lscpu | grep "CPU MHz" | awk '{print $3}')
+        CPU_CACHE=$(lscpu | grep "L3 cache" | awk '{print $3$4}')
     else
-        CPU_MODEL="Не определено"
-        CPU_CORES="?"
+        CPU_MODEL="Не определено"; CPU_CORES="?"; CPU_FREQ="?"; CPU_CACHE="?"
     fi
-    CPU_MODEL=${CPU_MODEL:-Не определено}
-    CPU_CORES=${CPU_CORES:-1}
-    
-    # RAM
-    RAM_TOTAL_RAW=$(grep MemTotal /proc/meminfo | awk '{print $2/1024/1048}') # Исправлено на 1048576 (1024*1024)
+
+    # AES-NI / Virtualization
+    AES_NI=$(grep -qw aes /proc/cpuinfo && echo -e "${GREEN}✓ Включено${NC}" || echo -e "${RED}✗ Выключено${NC}")
+    VM_X=$(grep -Eow "vmx|svm" /proc/cpuinfo > /dev/null && echo -e "${GREEN}✓ Включено${NC}" || echo -e "${RED}✗ Выключено${NC}")
+    VIRT=$(systemd-detect-virt 2>/dev/null || echo "Unknown")
+
+    # DISK & MEM (Используем твои существующие расчеты с bc) [cite: 8]
+    RAM_TOTAL_RAW=$(grep MemTotal /proc/meminfo | awk '{print $2/1024/1024}')
     RAM_TOTAL=$(printf "%.1f" $RAM_TOTAL_RAW)
-    MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2/1024/1048}')
+    MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2/1024/1024}')
     MEM_USED=$(echo "$RAM_TOTAL - $MEM_FREE" | bc -l)
-    MEM_PERCENT=$(echo "$MEM_USED * 100 / $RAM_TOTAL" | bc -l | awk '{printf "%.0f", $1}')
-    MEM_DISPLAY=$(printf "%.1f/%.1f GB (%.0f%%)" $MEM_USED $RAM_TOTAL $MEM_PERCENT)
     
-    # IP CHECK
-    PUBLIC_IPV4=$(curl -s4 ipinfo.io/ip 2>/dev/null)
-    if [ -z "$PUBLIC_IPV4" ]; then PUBLIC_IPV4="Не удалось определить"; fi
+    DISK_USAGE=$(df -h --output=size,used / | tail -n 1)
+    read -r D_TOTAL D_USED <<< "$DISK_USAGE"
 
-    PUBLIC_IPV6=$(get_public_ipv6)
-   
-    CPU_LOAD=$(grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' | awk '{printf "%.2f%%", $1}')
-    DISK_USAGE=$(df -h --output=used,avail,pcent / | tail -n 1)
-    read -r USED AVAIL PCT <<< "$DISK_USAGE"
+    # SYSTEM INFO
+    UPTIME_RAW=$(uptime -p | sed 's/up //')
+    UPTIME=$(echo "$UPTIME_RAW" | sed -e 's/years\?/лет/g' -e 's/weeks\?/недель/g' -e 's/days\?/дн./g' -e 's/hours\?/час./g' -e 's/minutes\?/мин./g')
+    LOAD_AVG=$(awk '{print $1", "$2", "$3}' /proc/loadavg)
+    OS_NAME=$(grep "PRETTY_NAME" /etc/os-release | cut -d'"' -f2)
+    ARCH=$(uname -m)
+    KERNEL=$(uname -r)
+    TCP_CC=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
 
-    echo -e "${BLUE}--- ХАРАКТЕРИСТИКИ И СТАТУС СЕРВЕРА ------------------${NC}"
-    echo -e "${YELLOW}    CPU:             ${GREEN}$CPU_MODEL ($CPU_CORES core)${NC}"
-    echo -e "${YELLOW}    RAM (Нагрузка):  ${GREEN}$MEM_DISPLAY${NC}"
-    echo -e "${YELLOW}    Публичный IPv4:  ${GREEN}$PUBLIC_IPV4${NC}"
-    echo -e "${YELLOW}    Публичный IPv6:  ${PUBLIC_IPV6}${NC}"
-    echo -e "${YELLOW}    Аптайм:          ${GREEN}$UPTIME${NC}"
-    echo -e "${YELLOW}    CPU (Нагрузка):  ${GREEN}$CPU_LOAD${NC}"
-    echo -e "${YELLOW}    Диск (корень):   ${GREEN}Занято:$USED ($PCT) | Свободно:$AVAIL${NC}"
-    echo -e "${BLUE}------------------------------------------------------${NC}"
+    # NETWORK & GEO 
+    IPV4=$(curl -s4 ipinfo.io/ip 2>/dev/null || echo -e "${RED}✗ Offline${NC}")
+    IPV6=$(get_public_ipv6)
+    GEO_DATA=$(curl -s "http://ip-api.com/json/$PUBLIC_IPV4?lang=ru&fields=status,message,country,regionName,city,isp,org,as")
+    COUNTRY=$(echo "$GEO_DATA" | jq -r '.country' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"country":"\K[^"]+')
+    LOC=$(echo "$GEO_DATA" | jq -r '.city' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"city":"\K[^"]+')
+    REG=$(echo "$GEO_DATA" | jq -r '.regionName' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"regionName":"\K[^"]+')
+    ORG=$(echo "$GEO_DATA" | jq -r '.org' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"org":"\K[^"]+')
+    if [ -z "$ORG" ] || [ "$ORG" == "null" ]; then
+        ORG=$(echo "$GEO_DATA" | jq -r '.isp' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"isp":"\K[^"]+')
+    fi
+    # --- ВЫВОД МЕНЮ В СТИЛЕ BENCH.SH ---
+    echo -e "${BLUE}----------------------------------------------------------------------${NC}"
+    echo -e " Модель процессора   : ${YELLOW}$CPU_MODEL${NC}"
+    echo -e " Ядра процессора     : ${YELLOW}$CPU_CORES @ ${CPU_FREQ} MHz${NC}"
+    echo -e " Кэш процессора      : ${YELLOW}$CPU_CACHE${NC}"
+    echo -e " AES-NI              : $AES_NI"
+    echo -e " VM-x/AMD-V          : $VM_X"
+    echo -e " Всего диска         : ${YELLOW}$D_TOTAL ($D_USED использовано)${NC}"
+    echo -e " Всего памяти        : ${YELLOW}$RAM_TOTAL GB ($(printf "%.1f" $MEM_USED) GB использовано)${NC}"
+    echo -e " Время работы        : ${YELLOW}$UPTIME${NC}"
+    echo -e " Средняя нагрузка    : ${YELLOW}$LOAD_AVG${NC}"
+    echo -e " ОС                  : ${YELLOW}$OS_NAME${NC}"
+    echo -e " Архитектура         : ${YELLOW}$ARCH (64 Bit)${NC}"
+    echo -e " Ядро                : ${YELLOW}$KERNEL${NC}"
+    echo -e " TCP CC              : ${YELLOW}$TCP_CC${NC}"
+    echo -e " Виртуализация       : ${YELLOW}$VIRT${NC}"
+    echo -e " IPv4 / IPv6         : ${GREEN}$IPV4${NC} / ${GREEN}${IPV6}${NC}"
+    echo -e " Страна              : ${YELLOW}$COUNTRY${NC}"
+    echo -e " Организация         : ${YELLOW}$ORG${NC}"
+    echo -e " Локация             : ${YELLOW}$LOC${NC}"
+    echo -e " Регион              : ${YELLOW}$REG${NC}"
+    echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     
     # СТАТУС ПРИЛОЖЕНИЙ
     echo -e "${BLUE}--- СТАТУС ПРИЛОЖЕНИЙ --------------------------------${NC}"
