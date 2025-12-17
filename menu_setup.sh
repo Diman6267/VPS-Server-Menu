@@ -1,0 +1,231 @@
+#!/bin/bash
+source /usr/local/bin/_config_and_utils.sh
+
+# ----------------------------------------------------------------------
+# НАСТРОЙКИ СЕРВЕРА И ФУНКЦИИ ПРОВЕРКИ
+# ----------------------------------------------------------------------
+
+# --- ПРОВЕРКИ СТАТУСА ---
+
+function check_ufw_installed {
+    if ! command -v ufw &> /dev/null; then
+        echo -e "${RED}❌ UFW не установлен. Установите UFW (sudo apt install ufw) для управления PING.${NC}"
+        return 1
+    fi
+    return 0
+}
+
+function get_bbr_status {
+    if sysctl net.ipv4.tcp_congestion_control | grep -q "bbr"; then
+        echo "active"
+    else
+        echo "inactive"
+    fi
+}
+
+function get_ping_status {
+    local RULES_FILE="/etc/ufw/before.rules"
+    if grep -q "^[[:space:]]*[^#]*ufw-before-input -p icmp --icmp-type echo-request -j DROP" "$RULES_FILE" 2>/dev/null; then
+        echo "disabled"
+    else
+        echo "enabled"
+    fi
+}
+
+function get_ufw_status {
+    if sudo ufw status | grep -q "Status: active"; then echo "active"; else echo "inactive"; fi
+}
+
+function get_timezone_status {
+    timedatectl | grep "Time zone" | awk '{print $3}'
+}
+
+# ----------------------------------------------------------------------
+# НОВЫЕ ПУНКТЫ (UFW И TIMEZONE)
+# ----------------------------------------------------------------------
+
+function show_ufw_menu {
+    while true; do
+        clear
+        echo -e "${CYAN}--- 🛡️ УПРАВЛЕНИЕ ФАЙРВОЛОМ (UFW) -----------------------${NC}"
+        echo -e "    Статус: [$(if [ "$(get_ufw_status)" == "active" ]; then echo -e "${GREEN}ВКЛЮЧЕН${NC}"; else echo -e "${RED}ВЫКЛЮЧЕН${NC}"; fi)]"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "1) Включить UFW"
+        echo -e "2) Выключить UFW"
+        echo -e "3) Разрешить порт (allow)"
+        echo -e "4) Запретить порт (deny)"
+        echo -e "5) Удалить правило (по номеру)"
+        echo -e "6) Список правил"
+        echo -e "7) Перезагрузить (reload)"
+        echo -e "X) Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Выбор: " u_choice
+        case $u_choice in
+            1) sudo ufw enable ;;
+            2) sudo ufw disable ;;
+            3) read -p "Порт: " p ; sudo ufw allow "$p" ;;
+            4) read -p "Порт: " p ; sudo ufw deny "$p" ;;
+            5) sudo ufw status numbered ; read -p "Номер: " n ; sudo ufw delete "$n" ;;
+            6) sudo ufw status verbose ; read -p "Enter..." ;;
+            7) sudo ufw reload ;;
+            [Xx]) return ;;
+        esac
+    done
+}
+
+function set_timezone_menu {
+    while true; do
+        clear
+        echo -e "${CYAN}--- 🕒 НАСТРОЙКА ЧАСОВОГО ПОЯСА -------------------------${NC}"
+        echo -e "    Текущий пояс: ${GREEN}$(get_timezone_status)${NC}"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "1) Калининград (MSK-1)   5) Екатеринбург (MSK+2)"
+        echo -e "2) Москва (MSK)          6) Новосибирск (MSK+4)"
+        echo -e "3) Самара (MSK+1)        7) Владивосток (MSK+7)"
+        echo -e "4) UTC                   8) Магадан (MSK+8)"
+        echo -e "X) Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Выбор [1-8, X]: " t_choice
+        case $t_choice in
+            1) sudo timedatectl set-timezone Europe/Kaliningrad ;;
+            2) sudo timedatectl set-timezone Europe/Moscow ;;
+            3) sudo timedatectl set-timezone Europe/Samara ;;
+            4) sudo timedatectl set-timezone UTC ;;
+            5) sudo timedatectl set-timezone Asia/Yekaterinburg ;;
+            6) sudo timedatectl set-timezone Asia/Novosibirsk ;;
+            7) sudo timedatectl set-timezone Asia/Vladivostok ;;
+            8) sudo timedatectl set-timezone Asia/Magadan ;;
+            [Xx]) return ;;
+        esac
+        echo -e "${GREEN}✅ Готово.${NC}" ; sleep 1
+    done
+}
+
+# ----------------------------------------------------------------------
+# BBR: УПРАВЛЕНИЕ ОПТИМИЗАЦИЕЙ СЕТИ (Оригинал)
+# ----------------------------------------------------------------------
+
+function enable_bbr {
+    local SYSCTL_CONF="/etc/sysctl.conf"
+    if [ "$(get_bbr_status)" == "active" ]; then
+        echo -e "${YELLOW}BBR уже активен. Действие отменено.${NC}"
+        return
+    fi
+    echo -e "${CYAN}>>> Активация BBR...${NC}"
+    sudo sed -i '/net.core.default_qdisc/d' "$SYSCTL_CONF"
+    sudo sed -i '/net.ipv4.tcp_congestion_control/d' "$SYSCTL_CONF"
+    echo "net.core.default_qdisc=fq" | sudo tee -a "$SYSCTL_CONF" > /dev/null
+    echo "net.ipv4.tcp_congestion_control=bbr" | sudo tee -a "$SYSCTL_CONF" > /dev/null
+    sudo sysctl -p > /dev/null
+    if [ "$(get_bbr_status)" == "active" ]; then echo -e "${GREEN}✅ BBR успешно активирован.${NC}"; fi
+}
+
+function disable_bbr {
+    local SYSCTL_CONF="/etc/sysctl.conf"
+    if [ "$(get_bbr_status)" == "inactive" ]; then
+        echo -e "${YELLOW}BBR уже не используется. Действие отменено.${NC}"
+        return
+    fi
+    echo -e "${CYAN}>>> Отключение BBR (возврат к Cubic)...${NC}"
+    sudo sed -i '/net.core.default_qdisc/d' "$SYSCTL_CONF"
+    sudo sed -i '/net.ipv4.tcp_congestion_control/d' "$SYSCTL_CONF"
+    echo "net.core.default_qdisc=fq_codel" | sudo tee -a "$SYSCTL_CONF" > /dev/null
+    echo "net.ipv4.tcp_congestion_control=cubic" | sudo tee -a "$SYSCTL_CONF" > /dev/null
+    sudo sysctl -p > /dev/null
+    if [ "$(get_bbr_status)" == "inactive" ]; then echo -e "${GREEN}✅ BBR успешно отключен.${NC}"; fi
+}
+
+function show_bbr_menu {
+    while true; do
+        clear
+        STATUS=$(get_bbr_status)
+        echo -e "${CYAN}--- 📈 УПРАВЛЕНИЕ ОПТИМИЗАЦИЕЙ BBR -----------------------${NC}"
+        echo -e "    Текущий статус: [$(if [ "$STATUS" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "${GREEN}1) Активировать BBR${NC}"
+        echo -e "${RED}2) Деактивировать BBR (возврат к Cubic)${NC}"
+        echo -e "${YELLOW}3) Показать текущий алгоритм (sysctl)${NC}"
+        echo -e "${RED}X) Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Ваш выбор [1-3, X]: " choice
+        case $choice in
+            1) enable_bbr ;;
+            2) disable_bbr ;;
+            3) sysctl net.ipv4.tcp_congestion_control ;;
+            [Xx]) return ;;
+        esac
+        read -p "Нажмите Enter для продолжения..."
+    done
+}
+
+# ----------------------------------------------------------------------
+# PING: УПРАВЛЕНИЕ ЗАПРЕТОМ PING (Оригинал)
+# ----------------------------------------------------------------------
+
+function disable_ping {
+    if ! check_ufw_installed; then return; fi
+    local RULES_FILE="/etc/ufw/before.rules"
+    echo -e "${CYAN}>>> Активация Запрета PING...${NC}"
+    sudo sed -i '/# ok icmp codes for INPUT/a -A ufw-before-input -p icmp --icmp-type echo-request -j DROP' "$RULES_FILE"
+    sudo ufw reload > /dev/null
+    echo -e "${GREEN}✅ Запрет пинга активирован.${NC}"
+}
+
+function show_ping_menu {
+    while true; do
+        clear
+        STATUS=$(get_ping_status)
+        echo -e "${CYAN}--- 🛡️ УПРАВЛЕНИЕ ЗАПРЕТОМ PING (ICMP) --------------------${NC}"
+        echo -e "    Текущий статус: [$(if [ "$STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "${RED}1) Активировать Запрет PING${NC}"
+        echo -e "${RED}X) Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Ваш выбор [1, X]: " choice
+        case $choice in
+            1) disable_ping ;;
+            [Xx]) return ;;
+        esac
+        read -p "Нажмите Enter для продолжения..."
+    done
+}
+
+# ----------------------------------------------------------------------
+# ГЛАВНЫЙ ЦИКЛ МЕНЮ УСТАНОВКИ (Оригинал + 2 пункта)
+# ----------------------------------------------------------------------
+
+function run_setup_menu {
+    while true; do
+        clear
+        echo -e "${CYAN}======================================================${NC}"
+        echo -e "${CYAN}       ⚙️  МЕНЮ НАСТРОЙКИ И ОПТИМИЗАЦИИ СЕРВЕРА ⚙️      ${NC}"
+        echo -e "${CYAN}======================================================${NC}"
+        
+        BBR_STATUS=$(get_bbr_status)
+        PING_STATUS=$(get_ping_status)
+        
+        echo -e "${BLUE}--- ТЕКУЩИЕ СТАТУСЫ ----------------------------------${NC}"
+        echo -e "    BBR:       [$(if [ "$BBR_STATUS" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
+        echo -e "    PING:      [$(if [ "$PING_STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
+        echo -e "    UFW:       [$(if [ "$(get_ufw_status)" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
+        echo -e "    Timezone:  [${YELLOW}$(get_timezone_status)${NC}]"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
+
+        echo -e "${CYAN}1) Управление BBR (Оптимизация сети)${NC}"
+        echo -e "${CYAN}2) Управление PING (Запрет ICMP)${NC}"
+        echo -e "${CYAN}3) Управление Файрволом (UFW)${NC}"
+        echo -e "${CYAN}4) Настройка Timezone (Часовой пояс)${NC}"
+        echo -e "${RED}X) Назад в главное меню${NC}"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
+        
+        read -p "Ваш выбор [1-4, X]: " choice
+        case $choice in
+            1) show_bbr_menu ;;
+            2) show_ping_menu ;;
+            3) show_ufw_menu ;;
+            4) set_timezone_menu ;;
+            [Xx]) return ;;
+        esac
+    done
+}
+run_setup_menu

@@ -1,0 +1,101 @@
+#!/bin/bash
+
+# ======================================================================
+# ГЛАВНЫЙ ФАЙЛ МЕНЮ (МОДУЛЬНАЯ ВЕРСИЯ)
+# ======================================================================
+
+# Подключаем все общие переменные и функции
+source /usr/local/bin/_config_and_utils.sh
+
+# --- ГЛАВНОЕ МЕНЮ ---
+function show_menu {
+    clear
+    echo -e "${CYAN}======================================================${NC}"
+    echo -e "${CYAN}             🚀 МЕНЮ УПРАВЛЕНИЯ СЕРВЕРОМ 🚀            ${NC}"
+    echo -e "${CYAN}======================================================${NC}"
+    
+    # --- БЛОК ОТОБРАЖЕНИЯ ХАРАКТЕРИСТИК ---
+    UPTIME=$(uptime -p)
+    
+    # CPU
+    if command -v lscpu &> /dev/null; then
+        CPU_MODEL=$(lscpu 2>/dev/null | grep 'Model name:' | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//' -e 's/([^)]*)//g' -e 's/[[:space:]]*$//')
+        CPU_CORES=$(nproc)
+    elif [ -f "/proc/cpuinfo" ]; then
+        CPU_MODEL=$(grep 'model name' /proc/cpuinfo | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//' -e 's/([^)]*)//g' -e 's/[[:space:]]*$//')
+        CPU_CORES=$(grep -c processor /proc/cpuinfo)
+    else
+        CPU_MODEL="Не определено"
+        CPU_CORES="?"
+    fi
+    CPU_MODEL=${CPU_MODEL:-Не определено}
+    CPU_CORES=${CPU_CORES:-1}
+    
+    # RAM
+    RAM_TOTAL_RAW=$(grep MemTotal /proc/meminfo | awk '{print $2/1024/1048}') # Исправлено на 1048576 (1024*1024)
+    RAM_TOTAL=$(printf "%.1f" $RAM_TOTAL_RAW)
+    MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2/1024/1048}')
+    MEM_USED=$(echo "$RAM_TOTAL - $MEM_FREE" | bc -l)
+    MEM_PERCENT=$(echo "$MEM_USED * 100 / $RAM_TOTAL" | bc -l | awk '{printf "%.0f", $1}')
+    MEM_DISPLAY=$(printf "%.1f/%.1f GB (%.0f%%)" $MEM_USED $RAM_TOTAL $MEM_PERCENT)
+    
+    # IP CHECK
+    PUBLIC_IPV4=$(curl -s4 ipinfo.io/ip 2>/dev/null)
+    if [ -z "$PUBLIC_IPV4" ]; then PUBLIC_IPV4="Не удалось определить"; fi
+
+    PUBLIC_IPV6=$(get_public_ipv6)
+   
+    CPU_LOAD=$(grep 'cpu ' /proc/stat | awk '{print ($2+$4)*100/($2+$4+$5)}' | awk '{printf "%.2f%%", $1}')
+    DISK_USAGE=$(df -h --output=used,avail,pcent / | tail -n 1)
+    read -r USED AVAIL PCT <<< "$DISK_USAGE"
+
+    echo -e "${BLUE}--- ХАРАКТЕРИСТИКИ И СТАТУС СЕРВЕРА ------------------${NC}"
+    echo -e "${YELLOW}    CPU:             ${GREEN}$CPU_MODEL ($CPU_CORES core)${NC}"
+    echo -e "${YELLOW}    RAM (Нагрузка):  ${GREEN}$MEM_DISPLAY${NC}"
+    echo -e "${YELLOW}    Публичный IPv4:  ${GREEN}$PUBLIC_IPV4${NC}"
+    echo -e "${YELLOW}    Публичный IPv6:  ${PUBLIC_IPV6}${NC}"
+    echo -e "${YELLOW}    Аптайм:          ${GREEN}$UPTIME${NC}"
+    echo -e "${YELLOW}    CPU (Нагрузка):  ${GREEN}$CPU_LOAD${NC}"
+    echo -e "${YELLOW}    Диск (корень):   ${GREEN}Занято:$USED ($PCT) | Свободно:$AVAIL${NC}"
+    echo -e "${BLUE}------------------------------------------------------${NC}"
+    
+    # СТАТУС ПРИЛОЖЕНИЙ
+    echo -e "${BLUE}--- СТАТУС ПРИЛОЖЕНИЙ --------------------------------${NC}"
+    STATUS_XUI=$(get_service_status $XUI_SERVICE)
+    STATUS_HYS=$(get_service_status $HYSTERIA_SERVICE)
+    
+    echo -e "    X-UI:        [$(if [ "$STATUS_XUI" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)]"
+    echo -e "    Hysteria2:   [$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)]"
+    
+    echo -e "${BLUE}--- ДЕЙСТВИЯ ---------------------------------------${NC}"
+    echo -e "${YELLOW}1) Управление X-UI (Установка/Запуск/Настройка)${NC}"
+    echo -e "${YELLOW}2) Управление Hysteria2 (Установка/Старт/Стоп/Пользователи)${NC}"
+    echo -e "${YELLOW}3) Тестирование сервера (Скорость/Блокировки/Сканер)${NC}"
+    echo -e "${YELLOW}4) Настройка и оптимизация сервера${NC}"
+    echo -e "${GREEN}5) Меню IPv6 (Вкл/Выкл/Статус)${NC}"
+    echo -e "${RED}X) Выход в оболочку${NC}"
+    echo -e "${BLUE}------------------------------------------------------${NC}"
+}
+
+# ГЛАВНЫЙ ЦИКЛ ЗАПУСКА - вызывает внешние скрипты
+while true; do
+    show_menu
+    PROMPT=$(echo -e "${CYAN}Ваш выбор [1-5, X]: ${NC}")
+    read -p "$PROMPT" choice
+
+    case $choice in
+        1) /usr/local/bin/menu_xui.sh ;;
+        2) /usr/local/bin/menu_hysteria.sh ;;
+        3) /usr/local/bin/menu_tests.sh ;;
+        4) /usr/local/bin/menu_setup.sh ;;
+        5) /usr/local/bin/ipv6-menu ;;
+        [Xx])                                   
+            echo -e "${GREEN}Выход в оболочку.${NC}"
+            break
+            ;;
+        *)
+            echo -e "${RED}❌ Неверный ввод.${NC}"
+            sleep 1
+            ;;
+    esac
+done

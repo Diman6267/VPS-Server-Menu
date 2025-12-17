@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# Цвета ANSI
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# ----------------------------------------------------------------------
+# ВСТРОЕННЫЕ ФУНКЦИИ УПРАВЛЕНИЯ IPV6
+# ----------------------------------------------------------------------
+
+function get_ipv6_status_code() {
+    cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0
+}
+
+function ipv6_status {
+    local status_code=$(get_ipv6_status_code)
+    echo -e "${BLUE}--------------------------------------------------${NC}"
+    if [[ "$status_code" -eq 1 ]]; then
+        echo -e "   Статус: ${RED}ОТКЛЮЧЕН (На уровне ядра)${NC}"
+        echo -e "   Адреса: ${YELLOW}Нет активных IPv6 адресов.${NC}"
+    else
+        echo -e "   Статус ядра (disable_ipv6): ${GREEN}0 (Включен)${NC}"
+        IP_OUTPUT=$(ip -6 a show | grep 'inet6' | awk '{print $2, $4, $7}')
+        if [[ -z "$IP_OUTPUT" ]]; then
+            echo -e "   Адреса: ${RED}Нет активных IPv6 адресов.${NC}"
+        else
+            echo -e "   ${GREEN}Активные адреса: НАЙДЕНЫ${NC}"
+            echo "$IP_OUTPUT" | while read -r addr scope iface_name; do
+                echo -e "   -> ${GREEN}$addr scope $scope [${iface_name}]${NC}"
+            done
+        fi
+    fi
+    echo -e "${BLUE}--------------------------------------------------${NC}"
+}
+
+function ipv6_off {
+    echo -e "\n${YELLOW}>>> Отключение IPv6...${NC}"
+    sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1 > /dev/null
+    sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1 > /dev/null
+    echo -e "${GREEN}✅ IPv6 выключен в текущей сессии.${NC}"
+}
+
+function ipv6_on {
+    echo -e "\n${YELLOW}>>> Включение IPv6...${NC}"
+    sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 > /dev/null
+    sudo sysctl -w net.ipv6.conf.default.disable_ipv6=0 > /dev/null
+    if command -v netplan > /dev/null; then sudo netplan apply > /dev/null 2>&1; fi
+    echo -e "${GREEN}✅ IPv6 включен в текущей сессии.${NC}"
+}
+
+# Функция для настройки автозагрузки (универсальный метод через sysctl.conf)
+function ipv6_autostart_config {
+    echo -e "\n${CYAN}Настройка автозагрузки при старте сервера:${NC}"
+    echo "1) Всегда ОТКЛЮЧАТЬ IPv6"
+    echo "2) Всегда ВКЛЮЧАТЬ IPv6 (по умолчанию)"
+    read -p "Ваш выбор: " auto_choice
+
+    # Удаляем старые записи, чтобы не было дублей
+    sudo sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.conf
+    sudo sed -i '/net.ipv6.conf.default.disable_ipv6/d' /etc/sysctl.conf
+
+    if [[ "$auto_choice" == "1" ]]; then
+        echo "net.ipv6.conf.all.disable_ipv6 = 1" | sudo tee -a /etc/sysctl.conf > /dev/null
+        echo "net.ipv6.conf.default.disable_ipv6 = 1" | sudo tee -a /etc/sysctl.conf > /dev/null
+        echo -e "${GREEN}✅ Настроено: IPv6 будет автоматически отключаться при загрузке.${NC}"
+    else
+        echo -e "${GREEN}✅ Настроено: IPv6 будет включаться при загрузке (блокировка удалена).${NC}"
+    fi
+}
+
+# ----------------------------------------------------------------------
+# ОСНОВНОЕ МЕНЮ
+# ----------------------------------------------------------------------
+
+function show_menu {
+    clear
+    echo -e "${CYAN}==================================================${NC}"
+    echo -e "${CYAN}           ⚙️  МЕНЮ УПРАВЛЕНИЯ IPv6 ⚙️            ${NC}"
+    echo -e "${CYAN}==================================================${NC}"
+    
+    ipv6_status
+    
+    echo -e "   Выберите действие:"
+    echo -e "${RED}   1) Отключить IPv6 (сейчас)${NC}"
+    echo -e "${GREEN}   2) Включить IPv6 (сейчас)${NC}"
+    echo -e "${YELLOW}   3) Настроить автозагрузку (при старте)${NC}"
+    echo -e "${CYAN}   X) Назад в главное меню${NC}" 
+    echo -e "${BLUE}--------------------------------------------------${NC}"
+}
+
+while true; do
+    show_menu
+    read -p "$(echo -e "${CYAN}Ваш выбор [1-3, X]: ${NC}")" choice
+
+    case $choice in
+        1) ipv6_off ;;
+        2) ipv6_on ;;
+        3) ipv6_autostart_config ;;
+        [Xx]) break ;;
+        *) echo -e "${RED}❌ Неверный ввод.${NC}" ; sleep 1 ;;
+    esac
+    read -p "$(echo -e "${GREEN}Нажмите Enter для продолжения...${NC}")"
+done
