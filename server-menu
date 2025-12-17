@@ -73,6 +73,7 @@ function show_menu {
     echo -e "${YELLOW}3) Тестирование сервера (Скорость/Блокировки/Сканер)${NC}"
     echo -e "${YELLOW}4) Настройка и оптимизация сервера${NC}"
     echo -e "${GREEN}5) Меню IPv6 (Вкл/Выкл/Статус)${NC}"
+    echo -e "${CYAN}6) 🔄 ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
     echo -e "${RED}X) Выход в оболочку${NC}"
     echo -e "${BLUE}------------------------------------------------------${NC}"
 }
@@ -89,6 +90,11 @@ while true; do
         3) /usr/local/bin/menu_tests.sh ;;
         4) /usr/local/bin/menu_setup.sh ;;
         5) /usr/local/bin/ipv6-menu ;;
+        6)
+           echo -e "${YELLOW}>>> Обновление скриптов...${NC}"
+           bash <(curl -sL https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh)
+           exit 0 
+           ;;
         [Xx])                                   
             echo -e "${GREEN}Выход в оболочку.${NC}"
             break
