@@ -162,32 +162,47 @@ function show_bbr_menu {
 # PING: УПРАВЛЕНИЕ ЗАПРЕТОМ PING (Оригинал)
 # ----------------------------------------------------------------------
 
-function disable_ping {
-    if ! check_ufw_installed; then return; fi
+function manage_ping_logic {
     local RULES_FILE="/etc/ufw/before.rules"
-    echo -e "${CYAN}>>> Активация Запрета PING...${NC}"
-    sudo sed -i '/# ok icmp codes for INPUT/a -A ufw-before-input -p icmp --icmp-type echo-request -j DROP' "$RULES_FILE"
+    local ACTION=$1  # "disable" или "enable"
+
+    if [ "$ACTION" == "disable" ]; then
+        # 1. Массовая замена ACCEPT на DROP (и в INPUT, и в FORWARD)
+        sudo sed -i '/ufw-before-input -p icmp --icmp-type .* -j ACCEPT/s/ACCEPT/DROP/' "$RULES_FILE"
+        sudo sed -i '/ufw-before-forward -p icmp --icmp-type .* -j ACCEPT/s/ACCEPT/DROP/' "$RULES_FILE"
+        
+        # 2. Добавляем source-quench ТОЛЬКО в блок INPUT (после echo-request)
+        if ! grep -q "source-quench -j DROP" "$RULES_FILE"; then
+            sudo sed -i '/ufw-before-input -p icmp --icmp-type echo-request -j DROP/a -A ufw-before-input -p icmp --icmp-type source-quench -j DROP' "$RULES_FILE"
+        fi
+        echo -e "${GREEN}✅ Пинг запрещен. (Блок FORWARD только переведен в DROP)${NC}"
+    else
+        # 1. Массовая замена DROP на ACCEPT обратно
+        sudo sed -i '/ufw-before-input -p icmp --icmp-type .* -j DROP/s/DROP/ACCEPT/' "$RULES_FILE"
+        sudo sed -i '/ufw-before-forward -p icmp --icmp-type .* -j DROP/s/DROP/ACCEPT/' "$RULES_FILE"
+        
+        # 2. Удаляем source-quench (он был только в INPUT)
+        sudo sed -i '/source-quench -j ACCEPT/d' "$RULES_FILE"
+        echo -e "${GREEN}✅ Пинг разрешен.${NC}"
+    fi
     sudo ufw reload > /dev/null
-    echo -e "${GREEN}✅ Запрет пинга активирован.${NC}"
 }
 
 function show_ping_menu {
-    while true; do
-        clear
-        STATUS=$(get_ping_status)
-        echo -e "${CYAN}--- 🛡️ УПРАВЛЕНИЕ ЗАПРЕТОМ PING (ICMP) --------------------${NC}"
-        echo -e "    Текущий статус: [$(if [ "$STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
-        echo -e "${BLUE}----------------------------------------------------------${NC}"
-        echo -e "${RED}1) Активировать Запрет PING${NC}"
-        echo -e "${RED}X) Назад"
-        echo -e "${BLUE}----------------------------------------------------------${NC}"
-        read -p "Ваш выбор [1, X]: " choice
-        case $choice in
-            1) disable_ping ;;
-            [Xx]) return ;;
-        esac
-        read -p "Нажмите Enter для продолжения..."
-    done
+    check_ufw_installed || return
+    PING_STATUS=$(get_ping_status)
+
+    echo -e "\n${CYAN}>>> УПРАВЛЕНИЕ ПИНГОМ (ICMP)${NC}"
+    if [ "$PING_STATUS" == "enabled" ]; then
+        echo -e "Текущий статус: ${GREEN}РАЗРЕШЕН${NC}"
+        read -p "Желаете ЗАПРЕТИТЬ пинг? [y/N]: " act
+        [[ "$act" =~ ^[Yy]$ ]] && manage_ping_logic "disable"
+    else
+        echo -e "Текущий статус: ${RED}ЗАПРЕЩЕН${NC}"
+        read -p "Желаете РАЗРЕШИТЬ пинг? [y/N]: " act
+        [[ "$act" =~ ^[Yy]$ ]] && manage_ping_logic "enable"
+    fi
+    sleep 2
 }
 
 # ----------------------------------------------------------------------
