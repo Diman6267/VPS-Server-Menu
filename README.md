@@ -16,4 +16,4 @@
 Для установки всех инструментов или обновления текущей версии до актуальной (с GitHub), выполните команду:
 
 ```bash
-bash <(curl -sL [https://raw.githubusercontent.com/ТВОЙ_ЛОГИН/ИМЯ_РЕПО/main/install.sh](https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh))
+bash <(curl -sL [https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh](https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh))
