@@ -20,7 +20,10 @@ function show_menu {
     if command -v lscpu &> /dev/null; then
         CPU_MODEL=$(lscpu 2>/dev/null | grep 'Model name:' | head -n 1 | awk -F ':' '{print $2}' | sed -e 's/^[ \t]*//')
         CPU_CORES=$(nproc)
-        CPU_FREQ=$(lscpu | grep "CPU MHz" | awk '{print $3}')
+        CPU_FREQ=$(lscpu | grep -i "CPU MHz" | awk -F': ' '{print $2}' | xargs)
+		if [ -z "$CPU_FREQ" ]; then
+    CPU_FREQ=$(grep -m1 "cpu MHz" /proc/cpuinfo | awk -F': ' '{print $2}' | xargs)
+fi
         CPU_CACHE=$(lscpu | grep "L3 cache" | awk '{print $3$4}')
     else
         CPU_MODEL="Не определено"; CPU_CORES="?"; CPU_FREQ="?"; CPU_CACHE="?"
