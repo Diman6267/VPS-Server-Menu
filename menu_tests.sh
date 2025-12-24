@@ -86,11 +86,16 @@ function run_tests_menu {
         echo -e "${CYAN}======================================================${NC}"
         echo -e "${CYAN}             🧪 МЕНЮ ТЕСТОВ СЕРВЕРА 🧪                ${NC}"
         echo -e "${CYAN}======================================================${NC}"
-        echo -e "${YELLOW}1) Проверка IP на блокировки (IP.Check.Place)${NC}"
-        echo -e "${YELLOW}2) Тест скорости к Российским провайдерам (iPerf3)${NC}"
-        echo -e "${YELLOW}3) Тест скорости к Зарубежным провайдерам (bench.sh)${NC}"
-        echo -e "${YELLOW}4) Проверка блокировки аудио в Instagram${NC}"
-        echo -e "${YELLOW}5) Запуск Realitls Scaner${NC}"
+        echo -e "${YELLOW}1) IP region${NC}"
+		echo -e "${YELLOW}2) Censorcheck для проверки геоблока${NC}"
+        echo -e "${YELLOW}3) Censorcheck для серверов РФ${NC}"
+        echo -e "${YELLOW}4) Тест до российских iPerf3 серверов${NC}"
+        echo -e "${YELLOW}5) YABS Benchmark${NC}"
+		echo -e "${YELLOW}6) Проверка IP сервера на блокировки зарубежными сервисами${NC}"
+		echo -e "${YELLOW}7) Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
+		echo -e "${YELLOW}8) IPQuality${NC}"
+		echo -e "${YELLOW}9) Тест на процессор${NC}"
+        echo -e "${YELLOW}10) Запуск Realitls Scaner${NC}"
         echo -e "${RED}X) Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
@@ -99,22 +104,42 @@ function run_tests_menu {
 
         case $choice in
             1)
-                echo -e "${CYAN}>>> Запуск проверки IP на блокировки...${NC}"
-                bash <(curl -Ls IP.Check.Place) -l en
+                echo -e "${CYAN}>>> Запуск IP region...${NC}"
+                bash <(wget -qO- https://ipregion.vrnt.xyz)
                 ;;
             2)
-                echo -e "${CYAN}>>> Запуск теста скорости (Россия)...${NC}"
-                bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
+                echo -e "${CYAN}>>> Censorcheck для проверки геоблока...${NC}"
+                bash <(wget -qO- https://github.com/vernette/censorcheck/raw/master/censorcheck.sh) --mode geoblock
                 ;;
             3)
-                echo -e "${CYAN}>>> Запуск теста скорости (Мир)...${NC}"
-                wget -qO- bench.sh | bash
+                echo -e "${CYAN}>>> Censorcheck для серверов РФ...${NC}"
+                bash <(wget -qO- https://github.com/vernette/censorcheck/raw/master/censorcheck.sh) --mode dpi
                 ;;
             4)
-                echo -e "${CYAN}>>> Проверка блокировки аудио в Instagram...${NC}"
-                bash <(curl -L -s https://bench.openode.xyz/checker_inst.sh)
+                echo -e "${CYAN}>>> Тест до российских iPerf3 серверов...${NC}"
+                bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
                 ;;
-            5) run_scanner ;;
+			5)
+                echo -e "${CYAN}>>> Запуск YABS...${NC}"
+                curl -sL yabs.sh | bash -s -- -4
+                ;;
+			6)
+                echo -e "${CYAN}>>> Проверка IP сервера на блокировки зарубежными сервисами...${NC}"
+                bash <(curl -Ls IP.Check.Place) -l en
+                ;;
+			7)
+                echo -e "${CYAN}>>> Параметры сервера и проверка скорости к зарубежным провайдерам...${NC}"
+                wget -qO- bench.sh | bash
+                ;;
+			8)
+                echo -e "${CYAN}>>> Запуск IPQuality...${NC}"
+                bash <(curl -Ls https://Check.Place) -EI
+                ;;
+			9)
+                echo -e "${CYAN}>>> Запуск теста на процессор...${NC}"
+                sysbench cpu run --threads=1
+                ;;	
+            10) run_scanner ;;
             [Xx]) return ;;
             *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
         esac
