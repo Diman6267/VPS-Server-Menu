@@ -55,19 +55,40 @@ function show_ufw_menu {
         echo -e "3) Разрешить порт (allow)"
         echo -e "4) Запретить порт (deny)"
         echo -e "5) Удалить правило (по номеру)"
-        echo -e "6) Список правил"
+        echo -e "6) Список правил (с номерами)"
         echo -e "7) Перезагрузить (reload)"
         echo -e "X) Назад"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
         read -p "Выбор: " u_choice
         case $u_choice in
-            1) sudo ufw enable ;;
+            1) sudo ufw --force enable ;;
             2) sudo ufw disable ;;
-            3) read -p "Порт: " p ; sudo ufw allow "$p" ;;
-            4) read -p "Порт: " p ; sudo ufw deny "$p" ;;
-            5) sudo ufw status numbered ; read -p "Номер: " n ; sudo ufw delete "$n" ;;
-            6) sudo ufw status verbose ; read -p "Enter..." ;;
-            7) sudo ufw reload ;;
+            3|4) 
+                # Логика для allow (3) и deny (4)
+                [ "$u_choice" == "3" ] && action="allow" || action="deny"
+                read -p "Введите порт: " p
+                echo -e "Выберите протокол для порта $p:"
+                echo -e "1) TCP\n2) UDP\n3) Оба (и TCP и UDP)"
+                read -p "Выбор [1-3]: " proto_choice
+                case $proto_choice in
+                    1) res=$(sudo ufw $action "$p/tcp") ;;
+                    2) res=$(sudo ufw $action "$p/udp") ;;
+                    *) res=$(sudo ufw $action "$p") ;;
+                esac
+                echo -e "${YELLOW}Результат:${NC} $res"
+                read -p "Нажмите Enter..." ;;
+            5) 
+                sudo ufw status numbered
+                read -p "Введите НОМЕР правила для удаления: " n
+                sudo ufw delete "$n"
+                read -p "Нажмите Enter..." ;;
+            6) 
+                echo -e "${GREEN}Текущие правила UFW:${NC}"
+                sudo ufw status numbered
+                read -p "Нажмите Enter..." ;;
+            7) 
+                sudo ufw reload
+                read -p "Нажмите Enter..." ;;
             [Xx]) return ;;
         esac
     done
