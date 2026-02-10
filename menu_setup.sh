@@ -60,35 +60,68 @@ function show_ufw_menu {
         echo -e "X) Назад"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
         read -p "Выбор: " u_choice
+
         case $u_choice in
             1) sudo ufw --force enable ;;
             2) sudo ufw disable ;;
             3|4) 
-                # Логика для allow (3) и deny (4)
                 [ "$u_choice" == "3" ] && action="allow" || action="deny"
+                
+                echo -e "${YELLOW}(Введите 0 или просто Enter для отмены)${NC}"
                 read -p "Введите порт: " p
+                
+                # Проверка на отмену
+                if [[ -z "$p" || "$p" == "0" ]]; then
+                    echo -e "${BLUE}Действие отменено.${NC}"
+                    sleep 1
+                    continue
+                fi
+
                 echo -e "Выберите протокол для порта $p:"
-                echo -e "1) TCP\n2) UDP\n3) Оба (и TCP и UDP)"
-                read -p "Выбор [1-3]: " proto_choice
+                echo -e "1) TCP\n2) UDP\n3) Оба (и TCP и UDP)\n0) Отмена"
+                read -p "Выбор [1-3, 0]: " proto_choice
+                
                 case $proto_choice in
                     1) res=$(sudo ufw $action "$p/tcp") ;;
                     2) res=$(sudo ufw $action "$p/udp") ;;
-                    *) res=$(sudo ufw $action "$p") ;;
+                    3) res=$(sudo ufw $action "$p") ;;
+                    *) echo -e "${BLUE}Действие отменено.${NC}"; sleep 1; continue ;;
                 esac
+                
                 echo -e "${YELLOW}Результат:${NC} $res"
-                read -p "Нажмите Enter..." ;;
+                read -p "Нажмите Enter для продолжения..." ;;
+            
             5) 
+                echo -e "${GREEN}Текущие пронумерованные правила:${NC}"
                 sudo ufw status numbered
+                echo -e "${YELLOW}(Введите 0 или просто Enter для отмены)${NC}"
                 read -p "Введите НОМЕР правила для удаления: " n
-                sudo ufw delete "$n"
+                
+                if [[ -z "$n" || "$n" == "0" ]]; then
+                    echo -e "${BLUE}Удаление отменено.${NC}"
+                    sleep 1
+                    continue
+                fi
+                
+                # Подтверждение удаления
+                read -p "Вы уверены, что хотите удалить правило #$n? (y/n): " confirm
+                if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+                    res=$(sudo ufw --force delete "$n")
+                    echo -e "${YELLOW}Результат:${NC} $res"
+                else
+                    echo -e "${BLUE}Удаление отменено.${NC}"
+                fi
                 read -p "Нажмите Enter..." ;;
+                
             6) 
                 echo -e "${GREEN}Текущие правила UFW:${NC}"
                 sudo ufw status numbered
                 read -p "Нажмите Enter..." ;;
+                
             7) 
                 sudo ufw reload
                 read -p "Нажмите Enter..." ;;
+                
             [Xx]) return ;;
         esac
     done
