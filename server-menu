@@ -163,16 +163,18 @@ while true; do
         6) /usr/local/bin/ipv6-menu ;;
         7)
            echo -e "${YELLOW}>>> Обновление через Git...${NC}"
+           # Переходим в папку проекта 
            local SCRIPT_PATH=$(readlink -f "$0")
            local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
            cd "$SCRIPT_DIR" || exit
            
+           # Принудительно подтягиваем изменения 
            if git pull origin main; then
                echo -e "${GREEN}✅ Обновлено! Перезапуск...${NC}"
                sleep 1
-               exec bash "$0" [cite: 22]
+               exec bash "$0" # Перезагрузка меню 
            else
-               echo -e "${RED}❌ Ошибка Git. Проверьте соединение.${NC}"
+               echo -e "${RED}❌ Ошибка Git. Попробуйте выполнить 'git reset --hard origin/main'${NC}"
                read -p "Нажмите Enter..."
            fi
            ;;
