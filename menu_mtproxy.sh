@@ -54,9 +54,11 @@ function sync_mtp {
 # Красивый вывод инфо о пользователе
 function show_user_info {
     local name=$1
-    local key=$2
-    # УБИРАЕМ "dd" перед $key
-    local link="tg://proxy?server=$MTP_IP&port=$MTP_PORT&secret=$key"
+    local key=$2 # Здесь лежат те самые 32 символа из базы
+    
+    # ФОРМИРУЕМ ССЫЛКУ С DD ПЕРЕД КЛЮЧОМ
+    local link="tg://proxy?server=$MTP_IP&port=$MTP_PORT&secret=dd$key"
+    
     echo -e "${BLUE}------------------------------------------------------${NC}"
     echo -e "${YELLOW}👤 Пользователь:${NC} ${GREEN}$name${NC}"
     echo -e "${YELLOW}🔗 Ссылка:${NC} ${CYAN}$link${NC}"
