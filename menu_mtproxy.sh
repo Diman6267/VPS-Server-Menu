@@ -75,7 +75,7 @@ while true; do
     draw_header
     echo -e "${BLUE}--- ПОЛЬЗОВАТЕЛИ -------------------------------------${NC}"
     echo -e "${YELLOW}1) ➕ Добавить пользователей${NC}"
-    echo -e "${YELLOW}2) 📋 Показать все QR-коды${NC}"
+    echo -e "${YELLOW}2) 📋 Показать пользователей${NC}"
     echo -e "${RED}3) ❌ Удалить пользователей (выбор нескольких)${NC}"
     echo -e "${BLUE}--- СЕРВИС (IP: $MTP_IP | Port: $MTP_PORT) ---${NC}"
     echo -e "${GREEN}4) 🚀 Установка / Смена настроек${NC}"
