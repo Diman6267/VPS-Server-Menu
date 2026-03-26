@@ -118,7 +118,7 @@ while true; do
             fi
             ;;
 
-        0)
+        X)
             break
             ;;
             
