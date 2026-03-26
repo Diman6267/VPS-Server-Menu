@@ -8,34 +8,32 @@
 source /usr/local/bin/_config_and_utils.sh
 
 # --- БЛОК ПРОВЕРКИ ОБНОВЛЕНИЙ ---
+
 function check_for_updates {
-    # Переходим в директорию скрипта
-    cd "$(dirname "$0")"
-    
-    # Получаем данные из GitHub без скачивания (fetch)
-    git fetch &>/dev/null
-    
-    # Проверяем, отстает ли локальная ветка от удаленной
+    # Определяем, где мы находимся [cite: 1]
+    local SCRIPT_PATH=$(readlink -f "$0")
+    local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+    cd "$SCRIPT_DIR" || return
+
+    # Проверка наличия Git
+    [ ! -d .git ] && return
+
+    git fetch origin main &>/dev/null
     LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse @{u})
+    REMOTE=$(git rev-parse origin/main)
 
     if [ "$LOCAL" != "$REMOTE" ]; then
         echo -e "${YELLOW}======================================================"
         echo -e "📢 ${GREEN}ДОСТУПНО ОБНОВЛЕНИЕ!${NC}"
         echo -e "${YELLOW}------------------------------------------------------"
         echo -e "${CYAN}Что нового:${NC}"
-        # Показываем последние 3 сообщения коммитов из GitHub
-        git log HEAD..origin/main --oneline -n 3 | sed 's/^[a-z0-9]* //;s/^/- /'
+        git log HEAD..origin/main --oneline -n 3 | sed 's/^[a-z0-9]* //;s/^/- /' [cite: 2, 3]
         echo -e "${YELLOW}------------------------------------------------------"
-        echo -e "Чтобы обновиться, введите: ${GREEN}git pull${NC}"
-        echo -e "Или просто продолжайте работу."
+        echo -e "Нажмите ${GREEN}[7]${NC} для автоматического обновления."
         echo -e "======================================================${NC}"
         echo ""
-        sleep 2
     fi
 }
-
-# Вызываем проверку перед отрисовкой меню
 check_for_updates
 
 # --- ГЛАВНОЕ МЕНЮ ---
@@ -167,14 +165,20 @@ while true; do
         5) /usr/local/bin/menu_setup.sh ;;
         6) /usr/local/bin/ipv6-menu ;;
         7)
-           echo -e "${YELLOW}>>> Обновление скриптов...${NC}"
-           bash <(curl -sL https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh)
-           exit 0 
+           echo -e "${YELLOW}>>> Обновление через Git...${NC}"
+           local SCRIPT_PATH=$(readlink -f "$0")
+           local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+           cd "$SCRIPT_DIR" || exit
+           
+           if git pull origin main; then
+               echo -e "${GREEN}✅ Обновлено! Перезапуск...${NC}"
+               sleep 1
+               exec bash "$0" [cite: 22]
+           else
+               echo -e "${RED}❌ Ошибка Git. Проверьте соединение.${NC}"
+               read -p "Нажмите Enter..."
+           fi
            ;;
-        [Xx])                                   
-            echo -e "${GREEN}Выход в оболочку.${NC}"
-            break
-            ;;
         *)
             echo -e "${RED}❌ Неверный ввод.${NC}"
             sleep 1
