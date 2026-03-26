@@ -143,6 +143,14 @@ while true; do
             ;;
 
         4)
+            function check_docker {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${YELLOW}🐳 Docker не найден. Начинаю установку...${NC}"
+        curl -fsSL https://get.docker.com | sh
+        sudo systemctl enable --now docker
+        echo -e "${GREEN}✅ Docker установлен и добавлен в автозагрузку!${NC}"
+    fi
+}
             draw_header
             det_ip=$(get_my_ip)
             read -p "Подтвердите IPv4 ($det_ip): " p_ip; MTP_IP=${p_ip:-$det_ip}
