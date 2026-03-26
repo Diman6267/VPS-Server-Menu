@@ -145,37 +145,45 @@ fi
     echo -e "${GREEN}6) Меню IPv6 (Вкл/Выкл/Статус)${NC}"
     echo -e "${CYAN}7) 🔄 ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
     echo -e "${RED}X) Выход в оболочку${NC}"
-    echo -e "${RED}T) Тест снова${NC}"
+    echo -e "${RED}T) Тест2${NC}"
     echo -e "${BLUE}------------------------------------------------------${NC}"
 }
 
 # ГЛАВНЫЙ ЦИКЛ ЗАПУСКА - вызывает внешние скрипты
 while true; do
+    # 1. СНАЧАЛА ПРОВЕРЯЕМ ОБНОВЛЕНИЯ
+    # Если обновление есть, сработает read внутри функции и задержит экран
+    check_for_updates 
+
+    # 2. ПОТОМ РИСУЕМ МЕНЮ (здесь сработает clear)
     show_menu
-    PROMPT=$(echo -e "${CYAN}Ваш выбор [1-5, X]: ${NC}")
+    
+    PROMPT=$(echo -e "${CYAN}Ваш выбор [1-7, X]: ${NC}")
     read -p "$PROMPT" choice
 
     case $choice in
         1) /usr/local/bin/menu_xui.sh ;;
         2) /usr/local/bin/menu_hysteria.sh ;;
-		3) /usr/local/bin/menu_mtproxy.sh ;;
+        3) /usr/local/bin/menu_mtproxy.sh ;;
         4) /usr/local/bin/menu_tests.sh ;;
         5) /usr/local/bin/menu_setup.sh ;;
         6) /usr/local/bin/ipv6-menu ;;
         7)
-           echo -e "${YELLOW}>>> Обновление через Git...${NC}"
-           # Переходим в папку проекта 
-           local SCRIPT_PATH=$(readlink -f "$0")
-           local SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+           echo -e "${YELLOW}>>> Принудительное обновление через Git...${NC}"
+           SCRIPT_PATH=$(readlink -f "$0")
+           SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
            cd "$SCRIPT_DIR" || exit
            
-           # Принудительно подтягиваем изменения 
-           if git pull origin main; then
-               echo -e "${GREEN}✅ Обновлено! Перезапуск...${NC}"
+           git fetch origin main &>/dev/null
+           if git reset --hard origin/main; then
+               chmod +x server-menu
+               # Даем права и остальным скриптам в папке, чтобы не было Permission denied
+               chmod +x *.sh 2>/dev/null 
+               echo -e "${GREEN}✅ Обновлено до последней версии GitHub!${NC}"
                sleep 1
-               exec bash "$0" # Перезагрузка меню 
+               exec bash "$0"
            else
-               echo -e "${RED}❌ Ошибка Git. Попробуйте выполнить 'git reset --hard origin/main'${NC}"
+               echo -e "${RED}❌ Критическая ошибка обновления.${NC}"
                read -p "Нажмите Enter..."
            fi
            ;;
