@@ -179,6 +179,10 @@ while true; do
                read -p "Нажмите Enter..."
            fi
            ;;
+[Xx])                                   
+            echo -e "${GREEN}Выход в оболочку.${NC}"
+            break
+            ;;
         *)
             echo -e "${RED}❌ Неверный ввод.${NC}"
             sleep 1
