@@ -7,6 +7,37 @@
 # Подключаем все общие переменные и функции
 source /usr/local/bin/_config_and_utils.sh
 
+# --- БЛОК ПРОВЕРКИ ОБНОВЛЕНИЙ ---
+function check_for_updates {
+    # Переходим в директорию скрипта
+    cd "$(dirname "$0")"
+    
+    # Получаем данные из GitHub без скачивания (fetch)
+    git fetch &>/dev/null
+    
+    # Проверяем, отстает ли локальная ветка от удаленной
+    LOCAL=$(git rev-parse HEAD)
+    REMOTE=$(git rev-parse @{u})
+
+    if [ "$LOCAL" != "$REMOTE" ]; then
+        echo -e "${YELLOW}======================================================"
+        echo -e "📢 ${GREEN}ДОСТУПНО ОБНОВЛЕНИЕ!${NC}"
+        echo -e "${YELLOW}------------------------------------------------------"
+        echo -e "${CYAN}Что нового:${NC}"
+        # Показываем последние 3 сообщения коммитов из GitHub
+        git log HEAD..origin/main --oneline -n 3 | sed 's/^[a-z0-9]* //;s/^/- /'
+        echo -e "${YELLOW}------------------------------------------------------"
+        echo -e "Чтобы обновиться, введите: ${GREEN}git pull${NC}"
+        echo -e "Или просто продолжайте работу."
+        echo -e "======================================================${NC}"
+        echo ""
+        sleep 2
+    fi
+}
+
+# Вызываем проверку перед отрисовкой меню
+check_for_updates
+
 # --- ГЛАВНОЕ МЕНЮ ---
 function show_menu {
     clear
