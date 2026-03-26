@@ -4,7 +4,7 @@ source /usr/local/bin/_config_and_utils.sh
 USER_DB="/etc/server-menu/mtproxy_users.list"
 CONFIG_FILE="/etc/server-menu/mtproxy.conf"
 # Пытаемся получить IP сервера автоматически
-SERVER_IP=$(curl -s icanhazip.com)
+SERVER_IP=$(curl -s -4 icanhazip.com)
 [ -z "$SERVER_IP" ] && SERVER_IP="185.223.169.56"
 
 sudo mkdir -p /etc/server-menu
