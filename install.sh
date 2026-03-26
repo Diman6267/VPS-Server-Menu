@@ -19,6 +19,7 @@ FILES=(
     "ipv6-menu"
     "ipv6-status"
     "apply-ipv6-disable.sh"
+    "menu_mtproxy.sh"
 )
 
 # Цвета
@@ -37,7 +38,7 @@ sudo apt-get install -y -qq bc curl wget ufw net-tools lscpu iperf3 speedtest-cl
 
 echo -e "${CYAN}>>> [2/4] Подготовка структуры директорий...${NC}"
 mkdir -p /root/scanner
-
+mkdir -p /etc/server-menu
 echo -e "${CYAN}>>> [3/4] Загрузка файлов с GitHub...${NC}"
 for file in "${FILES[@]}"; do
     echo -n "   Скачивание $file... "
