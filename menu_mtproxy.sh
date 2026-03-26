@@ -35,7 +35,32 @@ function show_mtproxy_menu {
     echo -e "${CYAN}0) Назад в главное меню${NC}"
     echo -e "${CYAN}======================================================${NC}"
 }
+function show_links {
+    # Проверяем наличие qrencode
+    if ! command -v qrencode &> /dev/null; then
+        echo -e "${YELLOW}Установка утилиты для QR-кодов...${NC}"
+        sudo apt-get update && sudo apt-get install qrencode -y
+    fi
 
+    clear
+    echo -e "${BLUE}СПИСОК ПОЛЬЗОВАТЕЛЕЙ И QR-КОДЫ:${NC}"
+    echo "------------------------------------------------------"
+    
+    while IFS='|' read -r name key; do
+        local link="tg://proxy?server=185.223.169.56&port=8448&secret=dd$key"
+        
+        echo -e "${YELLOW}Пользователь:${NC} ${GREEN}$name${NC}"
+        echo -e "${YELLOW}Ссылка:${NC} $link"
+        echo -e "${CYAN}QR-код для сканирования:${NC}"
+        
+        # Генерируем QR-код прямо в терминале
+        qrencode -t ANSIUTF8 "$link"
+        
+        echo "------------------------------------------------------"
+    done < $USER_DB
+    
+    read -p "Нажмите Enter, чтобы вернуться в меню..."
+}
 while true; do
     show_mtproxy_menu
     read -p "Выбор: " sub
