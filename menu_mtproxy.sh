@@ -3,43 +3,59 @@ source /usr/local/bin/_config_and_utils.sh
 
 USER_DB="/etc/server-menu/mtproxy_users.list"
 CONFIG_FILE="/etc/server-menu/mtproxy.conf"
-# Пытаемся получить IP сервера автоматически
-SERVER_IP=$(curl -s -4 icanhazip.com)
-[ -z "$SERVER_IP" ] && SERVER_IP="185.223.169.56"
 
+# Создаем папку и файл базы, если их нет
 sudo mkdir -p /etc/server-menu
 [ ! -f "$USER_DB" ] && sudo touch $USER_DB
 
+# Функция определения внешнего IPv4
+function get_my_ip {
+    local ip=$(curl -s -4 icanhazip.com || curl -s -4 ifconfig.me || curl -s -4 api.ipify.org)
+    [ -z "$ip" ] && ip=$(hostname -I | awk '{print $1}')
+    echo "$ip"
+}
+
+# Загрузка настроек
 function load_config {
     if [ -f "$CONFIG_FILE" ]; then
         source "$CONFIG_FILE"
     else
         MTP_PORT="8448"
-        MTP_TAG="386fa80854214cc50f61914065327bfd"
+        MTP_TAG=""
+        MTP_IP=$(get_my_ip)
     fi
 }
 
+# Синхронизация с Docker
 function sync_mtp {
     load_config
     local secrets=$(awk -F'|' '{print $2}' $USER_DB | paste -sd "," -)
-    echo -e "${YELLOW}🔄 Синхронизация Docker...${NC}"
+    
+    echo -e "${YELLOW}🔄 Обновление контейнера Docker...${NC}"
     sudo docker stop mtproto-proxy &>/dev/null
     sudo docker rm mtproto-proxy &>/dev/null
+    
     if [ -n "$secrets" ]; then
+        # Формируем параметры. Важно: для работы тега часто нужен порт 8888
+        local tag_param=""
+        [ -n "$MTP_TAG" ] && tag_param="-e TAG=$MTP_TAG -p 8888:8888"
+        
         sudo docker run -d --name mtproto-proxy --restart always \
-            -p $MTP_PORT:443 -p 8888:8888 \
-            -e SECRET="$secrets" -e TAG="$MTP_TAG" \
+            -p $MTP_PORT:443 $tag_param \
+            -e SECRET="$secrets" \
             telegrammessenger/proxy:latest &>/dev/null
-        echo -e "${GREEN}✅ Контейнер обновлен!${NC}"
+        echo -e "${GREEN}✅ Прокси успешно запущен!${NC}"
     else
-        echo -e "${RED}⚠️ Нет ключей. Прокси остановлен.${NC}"
+        echo -e "${RED}⚠️ Список ключей пуст. Прокси остановлен.${NC}"
     fi
+    sleep 1
 }
 
+# Красивый вывод инфо о пользователе
 function show_user_info {
     local name=$1
     local key=$2
-    local link="tg://proxy?server=$SERVER_IP&port=$MTP_PORT&secret=dd$key"
+    local link="tg://proxy?server=$MTP_IP&port=$MTP_PORT&secret=dd$key"
     echo -e "${BLUE}------------------------------------------------------${NC}"
     echo -e "${YELLOW}👤 Пользователь:${NC} ${GREEN}$name${NC}"
     echo -e "${YELLOW}🔗 Ссылка:${NC} ${CYAN}$link${NC}"
@@ -54,14 +70,14 @@ function draw_header {
 }
 
 while true; do
-    draw_header
     load_config
+    draw_header
     echo -e "${BLUE}--- ПОЛЬЗОВАТЕЛИ -------------------------------------${NC}"
-    echo -e "${YELLOW}1) ➕ Добавить пользователей (одного или нескольких)${NC}"
-    echo -e "${YELLOW}2) 📋 Список всех пользователей и QR-коды${NC}"
+    echo -e "${YELLOW}1) ➕ Добавить пользователей${NC}"
+    echo -e "${YELLOW}2) 📋 Показать все QR-коды${NC}"
     echo -e "${RED}3) ❌ Удалить пользователей (выбор нескольких)${NC}"
-    echo -e "${BLUE}--- СЕРВИС -------------------------------------------${NC}"
-    echo -e "${GREEN}4) 🚀 Установка / Переустановка (Порт/Тег)${NC}"
+    echo -e "${BLUE}--- СЕРВИС (IP: $MTP_IP | Port: $MTP_PORT) ---${NC}"
+    echo -e "${GREEN}4) 🚀 Установка / Смена настроек${NC}"
     echo -e "${RED}5) 🗑️  Полное удаление прокси${NC}"
     echo -e "${CYAN}X) 🔙 Назад${NC}"
     echo -e "${CYAN}======================================================${NC}"
@@ -73,51 +89,42 @@ while true; do
             draw_header
             read -p "Сколько пользователей добавить? " ucount
             [[ ! "$ucount" =~ ^[0-9]+$ ]] && ucount=1
-            
-            new_users_list=()
+            new_users=()
             for (( i=1; i<=ucount; i++ )); do
-                echo -e "${YELLOW}Введите имя для пользователя #$i:${NC}"
+                echo -e "${YELLOW}Имя для пользователя #$i:${NC}"
                 read -p "> " uname
                 [ -z "$uname" ] && uname="User_$RANDOM"
-                
+                # Генерируем ровно 32 символа hex
                 usecret=$(head -c 16 /dev/urandom | xxd -ps)
                 echo "$uname|$usecret" | sudo tee -a $USER_DB > /dev/null
-                new_users_list+=("$uname|$usecret")
+                new_users+=("$uname|$usecret")
             done
-            
             sync_mtp
-            
             draw_header
-            echo -e "${GREEN}✨ НОВЫЕ ПОЛЬЗОВАТЕЛИ ДОБАВЛЕНЫ:${NC}"
-            for entry in "${new_users_list[@]}"; do
+            echo -e "${GREEN}✨ КЛЮЧИ СОЗДАНЫ:${NC}"
+            for entry in "${new_users[@]}"; do
                 IFS='|' read -r n k <<< "$entry"
                 show_user_info "$n" "$k"
             done
             read -p "Нажмите Enter для продолжения..."
             ;;
-            
         2)
             if ! command -v qrencode &> /dev/null; then sudo apt-get install qrencode -y &>/dev/null; fi
             draw_header
-            [ ! -s "$USER_DB" ] && echo -e "${RED}Список пуст!${NC}"
+            if [ ! -s "$USER_DB" ]; then echo -e "${RED}База пользователей пуста!${NC}"; sleep 2; continue; fi
             while IFS='|' read -r name key; do
                 show_user_info "$name" "$key"
             done < $USER_DB
-            read -p "Enter..."
+            read -p "Нажмите Enter..."
             ;;
-            
         3)
             draw_header
             mapfile -t users < $USER_DB
-            if [ ${#users[@]} -eq 0 ]; then echo -e "${RED}Список пуст!${NC}"; sleep 2; continue; fi
-            
-            for i in "${!users[@]}"; do
-                echo -e "${CYAN}$((i+1)))${NC} ${users[$i]%%|*}"
-            done
-            echo -e "${YELLOW}Введите номера пользователей через пробел (напр: 1 3 4)${NC}"
-            read -p "Номера: " -a nums
-            
-            # Удаляем выбранные строки (с конца, чтобы индексы не плыли)
+            if [ ${#users[@]} -eq 0 ]; then echo -e "${RED}Удалять некого!${NC}"; sleep 2; continue; fi
+            for i in "${!users[@]}"; do echo -e "${CYAN}$((i+1)))${NC} ${users[$i]%%|*}"; done
+            echo -e "${YELLOW}Введите номера через пробел (например: 1 3):${NC}"
+            read -p "> " -a nums
+            # Сортируем номера по убыванию, чтобы не сбить индексы при удалении строк
             sorted_nums=($(printf '%s\n' "${nums[@]}" | sort -nr))
             for n in "${sorted_nums[@]}"; do
                 if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -le "${#users[@]}" ]; then
@@ -126,28 +133,33 @@ while true; do
             done
             sync_mtp
             ;;
-
-        4) # Установка / Переустановка
+        4)
             draw_header
-            read -p "Порт (8448): " p; MTP_PORT=${p:-8448}
-            read -p "TAG бота: " t; MTP_TAG=${t:-"386fa80854214cc50f61914065327bfd"}
-            echo "MTP_PORT=$MTP_PORT" | sudo tee $CONFIG_FILE > /dev/null
-            echo "MTP_TAG=$MTP_TAG" | sudo tee -a $CONFIG_FILE > /dev/null
+            det_ip=$(get_my_ip)
+            read -p "Подтвердите IP сервера ($det_ip): " p_ip; MTP_IP=${p_ip:-$det_ip}
+            read -p "Порт (8448): " p_port; MTP_PORT=${p_port:-8448}
+            echo -e "${YELLOW}TAG нужен только для @MTProxybot. Если не используете — просто Enter.${NC}"
+            read -p "Введите TAG: " p_tag; MTP_TAG=${p_tag:-""}
+            
+            # Сохраняем в конфиг
+            sudo bash -c "cat > $CONFIG_FILE" <<EOF
+MTP_IP="$MTP_IP"
+MTP_PORT="$MTP_PORT"
+MTP_TAG="$MTP_TAG"
+EOF
             sudo ufw allow $MTP_PORT/tcp &>/dev/null
             sync_mtp
             ;;
-
-        5) # Удаление
+        5)
             draw_header
-            read -p "Удалить всё? (y/n): " confirm
+            read -p "Удалить прокси и базу пользователей? (y/n): " confirm
             if [[ $confirm == [yY] ]]; then
                 sudo docker stop mtproto-proxy &>/dev/null
                 sudo docker rm mtproto-proxy &>/dev/null
                 sudo rm -f $USER_DB $CONFIG_FILE
-                echo -e "${RED}Удалено.${NC}"; sleep 2
+                echo -e "${RED}Всё удалено.${NC}"; sleep 2
             fi
             ;;
-
         x|X|ч|Ч) break ;;
     esac
 done
