@@ -9,15 +9,12 @@ source /usr/local/bin/_config_and_utils.sh
 
 # --- БЛОК ПРОВЕРКИ ОБНОВЛЕНИЙ ---
 function check_for_updates {
-    # Переходим в папку репозитория
+    # Переходим в физическую папку репозитория
     cd /root/VPS-Server-Menu || return
     
-    # Если нет папки .git, выходим
     [ ! -d .git ] && return
 
-    # Запрашиваем инфо с GitHub
     git fetch origin main &>/dev/null
-    
     LOCAL=$(git rev-parse HEAD)
     REMOTE=$(git rev-parse origin/main)
 
@@ -28,11 +25,10 @@ function check_for_updates {
         echo -e "${CYAN}Что нового:${NC}"
         git log HEAD..origin/main --oneline -n 3 | sed 's/^[a-z0-9]* //;s/^/- /'
         echo -e "${YELLOW}------------------------------------------------------"
-        echo -e "Нажмите ${GREEN}[7]${NC} для автоматического обновления."
+        echo -e "Нажмите ${GREEN}[7]${NC} для обновления."
         echo -e "======================================================${NC}"
         echo ""
-        # ПАУЗА: чтобы сообщение не стерлось командой clear
-        read -p "Нажмите [Enter], чтобы войти в меню..."
+        read -p "Нажмите [Enter], чтобы продолжить..."
     fi
 }
 
