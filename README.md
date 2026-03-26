@@ -11,13 +11,14 @@
 - **Сеть**: Полное управление IPv6 (включение/отключение на уровне ядра).
 - **Тесты**: Speedtest, iPerf3, RealityTLS Scanner (с автозагрузкой GeoIP).
 
-## 🚀 Быстрая установка / Обновление
 
-Для установки всех инструментов или обновления текущей версии до актуальной (с GitHub), выполните команду:
-
+## 🛠 Установка / Обновление
+Запустите команду в терминале вашего сервера:
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/install.sh)
+```
 
-Для удаления
+## 🗑 Удаление
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/Diman6267/VPS-Server-Menu/main/uninstall.sh)
+```
