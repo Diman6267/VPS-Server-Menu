@@ -78,12 +78,15 @@ masquerade:
 EOF
     else
         echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
-        # Добавляем запрос SNI
-        read -p "Введите SNI для сертификата [google.com]: " HY_SNI
+        # Запрашиваем SNI (маскировку)
+        read -p "Введите SNI для маскировки [google.com]: " HY_SNI
         HY_SNI=${HY_SNI:-google.com}
         
-        # Используем $HY_SNI в поле /CN=
+        # Генерируем сертификат именно на этот домен
         openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$HY_SNI" -days 3650 2>/dev/null
+        
+        # Сохраним SNI в файл, чтобы функция генерации ссылок его видела
+        echo "$HY_SNI" > /etc/hysteria/sni.txt
         cat <<EOF > /etc/hysteria/config.yaml
 listen: :$HY_PORT
 tls:
@@ -186,7 +189,7 @@ function display_single_hysteria_uri {
         FINAL_ADDR=$(curl -s --max-time 2 https://ifconfig.me)
         # Добавляем insecure=1, иначе QR-код не заработает на телефоне
         # Маскировку (sni) ставим стандартную, например google.com
-        PARAMS="insecure=1&sni=google.com"
+        PARAMS="insecure=1&sni=$HY_SNI"
     fi
 
     # Сборка финальной ссылки
