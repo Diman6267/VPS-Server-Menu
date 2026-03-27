@@ -116,6 +116,16 @@ function run_tests_menu {
                 bash <(wget -qO- https://github.com/vernette/censorcheck/raw/master/censorcheck.sh) --mode dpi
                 ;;
             4)
+			# --- ПРОВЕРКА И УСТАНОВКА IPERF3 ---
+if ! command -v iperf3 &> /dev/null; then
+    echo -e "${YELLOW}>>> iperf3 не найден. Установка...${NC}"
+    sudo apt update && sudo apt install -y iperf3
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ iperf3 успешно установлен.${NC}"
+    else
+        echo -e "${RED}✗ Ошибка при установке iperf3. Тесты могут не работать.${NC}"
+    fi
+fi
                 echo -e "${CYAN}>>> Тест до российских iPerf3 серверов...${NC}"
                 bash <(wget -qO- https://github.com/itdoginfo/russian-iperf3-servers/raw/main/speedtest.sh)
                 ;;
