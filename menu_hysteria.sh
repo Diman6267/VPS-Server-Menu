@@ -1,195 +1,230 @@
 #!/bin/bash
 source /usr/local/bin/_config_and_utils.sh
 
-HYSTERIA_SERVICE="hysteria-server.service"
-CONF_PATH="/etc/hysteria/config.yaml"
+# ----------------------------------------------------------------------
+# HYSTERIA: УСТАНОВКА / УДАЛЕНИЕ / ПОЛЬЗОВАТЕЛИ (Вынесенный блок)
+# ----------------------------------------------------------------------
 
-# --- ПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-function wait_key {
-    echo -e "\n${YELLOW}Нажмите Enter для продолжения...${NC}"
-    read -r
+function install_hysteria {
+    echo -e "${YELLOW}>>> Установка Hysteria 2...${NC}" 
+    bash <(curl -fsSL https://get.hy2.sh/)
+    echo -e "${GREEN}✅ Установка Hysteria 2 завершена.${NC}"
 }
 
-# --- 1. ИНТЕРАКТИВНАЯ УСТАНОВКА ---
-function install_hysteria {
-    echo -e "${YELLOW}>>> Запуск установки Hysteria 2...${NC}"
-    bash <(curl -fsSL https://get.hy2.sh/)
+function remove_hysteria {
+    local attempts=0
+    local confirmed=false
 
-    echo -e "${BLUE}======================================================${NC}"
-    echo -e "${BLUE}       ⚙️  НАСТРОЙКА ПАРАМЕТРОВ СЕРВЕРА               ${NC}"
-    echo -e "${BLUE}======================================================${NC}"
+    echo -e "${RED}==================================================${NC}"
+    echo -e "${RED}      ⚠️    ОПАСНО: УДАЛЕНИЕ СЛУЖБЫ HYSTERIA 2    ⚠️     ${NC}"
+    echo -e "${RED}==================================================${NC}"
+    echo -e "${YELLOW}Это действие полностью удалит Hysteria и все ее конфигурационные файлы.${NC}"
+    
+    while [ $attempts -lt 3 ]; do
+        read -p "$(echo -e "${RED}ПОДТВЕРДИТЕ (попытка $((attempts+1))/3). Вы уверены, что хотите удалить Hysteria? [yes/no]: ${NC}")" confirm
+        if [[ "$confirm" == "yes" ]]; then
+            confirmed=true
+            break
+        fi
+        attempts=$((attempts + 1))
+    done
 
-    # Порт
-    read -p "Введите UDP порт [8443]: " HY_PORT
-    HY_PORT=${HY_PORT:-8443}
-
-    # Маскировка
-    read -p "URL маскировки [https://yahoo.com/]: " HY_MASQ
-    HY_MASQ=${HY_MASQ:-https://yahoo.com/}
-
-    # Выбор сертификата
-    echo -e "\n${CYAN}Выберите тип сертификата:${NC}"
-    echo "1) Свой домен (авто-выпуск через ACME/Let's Encrypt)"
-    echo "2) Самоподписанный (без домена, для IP)$"
-    read -p "Ваш выбор [1-2]: " CERT_TYPE
-
-    # Первичный пользователь
-    read -p "Имя первого пользователя [Admin]: " FIRST_USER
-    FIRST_USER=${FIRST_USER:-Admin}
-    FIRST_PASS=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12)
-
-    mkdir -p /etc/hysteria/
-
-    if [ "$CERT_TYPE" == "1" ]; then
-        read -p "Введите ваш домен (напр. domain.com): " HY_DOMAIN
-        read -p "Введите email для ACME: " HY_EMAIL
-        
-        cat <<EOF > $CONF_PATH
-listen: :$HY_PORT
-acme:
-  domains:
-    - $HY_DOMAIN
-  email: $HY_EMAIL
-auth:
-  type: userpass
-  userpass:
-    $FIRST_USER: "$FIRST_PASS"
-masquerade:
-  type: proxy
-  proxy:
-    url: $HY_MASQ
-    rewriteHost: true
-EOF
+    if [ "$confirmed" = true ]; then
+        echo -e "${YELLOW}Запускаю удаление...${NC}"
+        bash <(curl -fsSL https://get.hy2.sh/) --remove
+        echo -e "${GREEN}✅ Hysteria 2 успешно удалена.${NC}"
     else
-        echo -e "${YELLOW}>>> Генерация самоподписанного сертификата...${NC}"
-        openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
-        cat <<EOF > $CONF_PATH
-listen: :$HY_PORT
-tls:
-  cert: /etc/hysteria/server.crt
-  key: /etc/hysteria/server.key
-auth:
-  type: userpass
-  userpass:
-    $FIRST_USER: "$FIRST_PASS"
-masquerade:
-  type: proxy
-  proxy:
-    url: $HY_MASQ
-    rewriteHost: true
-EOF
+        echo -e "${GREEN}Операция отменена. Служба Hysteria не была удалена.${NC}"
+    fi
+}
+
+function display_single_hysteria_uri {
+    SELECTED_USER=$1
+    USER_PASS=$2
+
+    SERVER_PORT=$(grep '^listen:' "$HYSTERIA_CONFIG" | awk '{print $NF}' | sed 's/:/ /g' | awk '{print $NF}')
+    SERVER_PORT=${SERVER_PORT:-8443}
+    SERVER_ADDR=$(grep -A 1 'domains:' "$HYSTERIA_CONFIG" | tail -n 1 | sed -e 's/^[[:space:]]*//' -e 's/- //')
+    SERVER_ADDR=${SERVER_ADDR:-<IP или Домен>}
+    SNI_HOST=$SERVER_ADDR
+    
+    if [ "$SERVER_ADDR" == "<IP или Домен>" ]; then
+        echo -e "${RED}❌ ВНИМАНИЕ: Не удалось автоматически найти домен в конфиге.${NC}"
     fi
 
-    # Открываем порт в UFW и запускаем
-    ufw allow $HY_PORT/udp
-    systemctl enable --now $HY_SERVICE
-    systemctl restart $HY_SERVICE
-
-    echo -e "${GREEN}✅ Hysteria 2 установлена и настроена!${NC}"
-    echo -e "Пользователь: ${CYAN}$FIRST_USER${NC}, Пароль: ${CYAN}$FIRST_PASS${NC}"
-    wait_key
+    HYSTERIA_URI="hysteria2://$SELECTED_USER:$USER_PASS@$SERVER_ADDR:$SERVER_PORT/?sni=$SNI_HOST"
+    
+    echo -e "\n${GREEN}==================================================${NC}"
+    echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $SELECTED_USER:${NC}"
+    
+    # ИСПРАВЛЕНИЕ: Проверка и установка qrencode
+    if check_and_install_qrencode; then 
+        echo -e "\n${CYAN}>>> QR-код:${NC}"
+        echo "$HYSTERIA_URI" | qrencode -t UTF8
+        echo -e "${CYAN}--------------------------------------------------${NC}"
+    else
+        echo -e "${YELLOW}💡 QR-код не будет отображен.${NC}"
+    fi
+    # -----------------------------------------------
+    
+    echo -e "${CYAN}🔗 ССЫЛКА (скопируйте):${NC}"
+    echo -e "$HYSTERIA_URI"
+    echo -e "${GREEN}==================================================${NC}"
 }
 
-# --- 2. УПРАВЛЕНИЕ СЕРВИСОМ (С ПАУЗОЙ) ---
-function manage_service {
+function generate_hysteria_uri {
+    USERS=$(awk '/userpass:/ {p=1; next} /masquerade:/ {p=0} p && /^[[:space:]]{4}.*:/' "$HYSTERIA_CONFIG" | sed -e 's/^[ \t]*//' -e 's/"//g' -e 's/:.*//')
+    
+    if [[ -z "$USERS" ]]; then
+        echo -e "${RED}❌ В конфиге нет активных пользователей.${NC}"
+        read -p "Нажмите Enter..."
+        return
+    fi
+    
+    clear
+    echo -e "${CYAN}==================================================${NC}"
+    echo -e "${CYAN}          🔗 СОЗДАНИЕ ССЫЛКИ HYSTERIA 2 🔗           ${NC}"
+    echo -e "${CYAN}==================================================${NC}"
+    
+    USER_ARRAY=($USERS)
+    for i in "${!USER_ARRAY[@]}"; do
+        echo -e "    $((i+1))) ${USER_ARRAY[i]}"
+    done
+    
+    read -p "Выберите номер пользователя [1-${#USER_ARRAY[@]}]: " USER_INDEX
+    
+    if [[ "$USER_INDEX" -gt 0 && "$USER_INDEX" -le "${#USER_ARRAY[@]}" ]]; then
+        SELECTED_USER="${USER_ARRAY[$((USER_INDEX-1))]}"
+        USER_PASS=$(grep "$SELECTED_USER:" "$HYSTERIA_CONFIG" | sed -e 's/.*: //g' -e 's/"//g')
+        if [[ -z "$USER_PASS" ]]; then
+            echo -e "${RED}❌ Не удалось найти пароль.${NC}"
+            return
+        fi
+        display_single_hysteria_uri "$SELECTED_USER" "$USER_PASS"
+    else
+        echo -e "${RED}❌ Неверный номер.${NC}"
+    fi
+}
+
+function manage_hysteria_users {
+    if [ ! -f "$HYSTERIA_CONFIG" ]; then
+        echo -e "${RED}❌ Ошибка: Конфиг не найден ($HYSTERIA_CONFIG)${NC}"
+        read -p "Нажмите Enter..."
+        return
+    fi
+    
     while true; do
         clear
-        echo -e "${CYAN}--- УПРАВЛЕНИЕ СЕРВИСОМ HYSTERIA ---${NC}"
-        systemctl status $HY_SERVICE --no-pager
-        echo -e "------------------------------------"
-        echo "1) Запустить"
-        echo "2) Остановить"
-        echo "3) Перезагрузить"
-        echo "X) Назад"
-        read -p "Выбор: " s_choice
-        case $s_choice in
-            1) systemctl start $HY_SERVICE ;;
-            2) systemctl stop $HY_SERVICE ;;
-            3) systemctl restart $HY_SERVICE ;;
-            [Xx]) break ;;
+        echo -e "${CYAN}==================================================${NC}"
+        echo -e "${CYAN}       👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ HYSTERIA 2     ${NC}"
+        echo -e "${CYAN}==================================================${NC}"
+
+        echo -e "${BLUE}ТЕКУЩИЕ ПОЛЬЗОВАТЕЛИ:${NC}"
+        USERS_RAW=$(awk '/userpass:/ {p=1; next} /masquerade:/ {p=0} p && /^[[:space:]]{4}.*:/' "$HYSTERIA_CONFIG")
+        
+        if [ -z "$USERS_RAW" ]; then
+            echo -e "    -> ${YELLOW}Нет активных пользователей.${NC}"
+        fi
+
+        echo "$USERS_RAW" | while read -r line; do
+            CLEAN_LINE=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/"//g' -e 's/: /:/')
+            echo -e "    -> $CLEAN_LINE"
+        done
+        echo -e "${BLUE}--------------------------------------------------${NC}"
+
+        echo -e "${YELLOW}    1) Добавить нового пользователя${NC}"
+        echo -e "${RED}    2) Удалить пользователя${NC}"
+        echo -e "${GREEN}    3) Создать ссылку Hysteria (URI) ${NC}"
+        echo -e "${RED}    X) Назад в меню Hysteria${NC}"
+        echo -e "${BLUE}--------------------------------------------------${NC}"
+        
+        read -p "Ваш выбор [1-3, X]: " choice
+
+        case $choice in
+            1)
+                read -p "Введите имя пользователя: " NEW_USER
+                if [[ "$NEW_USER" =~ [:\"] || -z "$NEW_USER" ]]; then
+                    echo -e "${RED}❌ Некорректное имя пользователя.${NC}"
+                    break
+                fi
+                read -p "Сгенерировать пароль? [Y/n]: " GENERATE_PASS
+              
+                if [[ "$GENERATE_PASS" =~ ^[Yy]$ || -z "$GENERATE_PASS" ]]; then
+                    NEW_PASS=$(openssl rand -hex 8)
+                    echo -e "${GREEN}Пароль: $NEW_PASS${NC}"
+                else
+                    read -p "Введите пароль: " NEW_PASS
+                fi
+
+                if [[ -z "$NEW_PASS" ]]; then echo -e "${RED}❌ Пароль пуст.${NC}"; break; fi
+
+                sudo sed -i "/[[:space:]]*userpass:/a \    $NEW_USER: \"$NEW_PASS\"" "$HYSTERIA_CONFIG"
+                echo -e "${GREEN}✅ Пользователь $NEW_USER добавлен.${NC}"
+                display_single_hysteria_uri "$NEW_USER" "$NEW_PASS"
+                restart_hysteria
+          
+                ;;
+
+            2)
+                USERS=$(awk '/userpass:/ {p=1; next} /masquerade:/ {p=0} p && /^    .*:/' "$HYSTERIA_CONFIG" | sed -e 's/^[ \t]*//' -e 's/"//g' -e 's/:.*//')
+                if [[ -z "$USERS" ]]; then echo -e "${RED}❌ Нет пользователей.${NC}"; break; fi
+                
+                echo -e "\n${YELLOW}Выберите пользователя для удаления:${NC}"
+                USER_ARRAY=($USERS)
+                for i in "${!USER_ARRAY[@]}"; do echo -e "    $((i+1))) ${USER_ARRAY[i]}"; done
+                
+                read -p "Номер [1-${#USER_ARRAY[@]}]: " USER_INDEX
+       
+                if [[ "$USER_INDEX" -gt 0 && "$USER_INDEX" -le "${#USER_ARRAY[@]}" ]]; then
+                    DEL_USER="${USER_ARRAY[$((USER_INDEX-1))]}"
+                    sudo sed -i "/^[[:space:]]*$DEL_USER:/d" "$HYSTERIA_CONFIG"
+                    echo -e "${RED}✅ Пользователь $DEL_USER удален.${NC}"
+            
+                    restart_hysteria
+                else
+                    echo -e "${RED}❌ Неверный номер.${NC}"
+                fi
+                ;;
+            3) generate_hysteria_uri ;;
+            [Xx]) return ;;
+            *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
         esac
-        echo -e "${GREEN}Готово.${NC}"
-        wait_key
+        read -p "Нажмите Enter для продолжения..."
     done
 }
 
-# --- 3. УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (Твоя рабочая логика) ---
-# Здесь остается твой функционал работы с config.yaml и passwords.json
-function manage_hysteria_users {
-    # Сохраняем твою функцию полностью, как она была в рабочем скрипте
-    # (для краткости здесь вызов, в файле на GitHub оставь свое тело функции)
-    echo -e "${YELLOW}Запуск управления пользователями...${NC}"
-    # Твоя логика редактирования YAML через sed или python3
-    # ...
-    wait_key
-}
+function manage_hysteria_service {
+    while true; do
+        clear
+        echo -e "${CYAN}======================================================${NC}"
+        echo -e "${CYAN}        👻 УПРАВЛЕНИЕ СЕРВИСОМ HYSTERIA 2 👻            ${NC}"
+        echo -e "${CYAN}======================================================${NC}"
+        
+        STATUS_HYS=$(get_service_status $HYSTERIA_SERVICE)
+        
+        STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
+        echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
 
-# --- 4. УДАЛЕНИЕ ---
-function remove_hysteria {
-    echo -e "${RED}!!! ВНИМАНИЕ: УДАЛЕНИЕ HYSTERIA 2 !!!${NC}"
-    read -p "Вы уверены? [yes/no]: " confirm
-    if [ "$confirm" == "yes" ]; then
-        systemctl stop $HY_SERVICE
-        systemctl disable $HY_SERVICE
-        bash <(curl -fsSL https://get.hy2.sh/) --uninstall
-        rm -rf /etc/hysteria
-        echo -e "${GREEN}✅ Сервис и файлы конфигурации удалены.${NC}"
-    else
-        echo "Отмена."
-    fi
-    wait_key
-}
-
-# --- 5. ВЫВОД ДАННЫХ ДЛЯ ПОДКЛЮЧЕНИЯ ---
-function show_config_info {
-    if [ ! -f $CONF_PATH ]; then echo -e "${RED}Конфиг не найден!${NC}"; wait_key; return; fi
-
-    local PORT=$(grep "listen:" $CONF_PATH | cut -d: -f3)
-    local IP=$(curl -s https://ifconfig.me)
-    # Ищем первого попавшегося пользователя
-    local USER_DATA=$(grep -A 1 "userpass:" $CONF_PATH | tail -n 1)
-    local USERNAME=$(echo "$USER_DATA" | awk -F: '{print $1}' | tr -d ' ')
-    local PASSWORD=$(echo "$USER_DATA" | awk -F'"' '{print $2}')
+        echo -e "${GREEN}1) Установить Hysteria 2${NC}"
+        echo -e "${YELLOW}2) Статус / Запустить / Остановить / Перезапустить сервис${NC}"
+        echo -e "${CYAN}3) Управление пользователями${NC}"
+        echo -e "${RED}4) Удалить Hysteria 2${NC}"
+        echo -e "${RED}X) Назад в главное меню${NC}"
+        echo -e "${BLUE}------------------------------------------------------${NC}"
     
-    # Определяем SNI (из домена или маскировки)
-    local SNI=$(grep "domains:" -A 1 $CONF_PATH | tail -n 1 | tr -d ' -' || grep "url:" $CONF_PATH | awk '{print $2}' | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+        read -p "Ваш выбор [1-4, X]: " choice
+        echo ""
 
-    local LINK="hysteria2://$PASSWORD@$IP:$PORT/?sni=$SNI&insecure=1#Hysteria2_$USERNAME"
-
-    echo -e "${GREEN}--- ДАННЫЕ ПОДКЛЮЧЕНИЯ ---${NC}"
-    echo -e "Ссылка: ${YELLOW}$LINK${NC}"
-    echo "------------------------------------------------------"
-    qrencode -t ansiutf8 "$LINK"
-    wait_key
+        case $choice in
+            1) install_hysteria ;;
+            2) manage_service_status_restart $HYSTERIA_SERVICE ;;
+            3) manage_hysteria_users ;;
+            4) remove_hysteria ;;
+            [Xx]) return ;;
+            *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
+        esac
+        read -p "Нажмите Enter для продолжения..."
+    done
 }
-
-# --- ГЛАВНОЕ МЕНЮ (Твой стиль) ---
-while true; do
-    clear
-    echo -e "${CYAN}======================================================${NC}"
-    echo -e "${CYAN}        👻 УПРАВЛЕНИЕ СЕРВИСОМ HYSTERIA 2 👻            ${NC}"
-    echo -e "${CYAN}======================================================${NC}"
-    
-    STATUS_HYS=$(systemctl is-active $HY_SERVICE 2>/dev/null)
-    STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
-    
-    echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
-    echo -e "------------------------------------------------------"
-    echo -e "${GREEN}1) Установить Hysteria 2 (Интерактивно)${NC}"
-    echo -e "${YELLOW}2) Управление сервисом (Старт/Стоп/Статус)${NC}"
-    echo -e "${CYAN}3) Управление пользователями${NC}"
-    echo -e "${PURPLE}4) Показать QR-код и ссылку${NC}"
-    echo -e "${RED}5) Удалить Hysteria 2 полностью${NC}"
-    echo -e "X) Назад в главное меню"
-    echo -e "------------------------------------------------------"
-
-    read -p "Ваш выбор: " choice
-    case $choice in
-        1) install_hysteria ;;
-        2) manage_service ;;
-        3) manage_hysteria_users ;;
-        4) show_config_info ;;
-        5) remove_hysteria ;;
-        [Xx]) break ;;
-    esac
-done
+manage_hysteria_service
