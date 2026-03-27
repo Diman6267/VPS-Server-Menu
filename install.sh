@@ -30,6 +30,7 @@ fi
 # 4. Настройка прав доступа
 echo -e "${YELLOW}>>> Установка прав на исполнение...${NC}"
 chmod +x "$TARGET_DIR/server-menu"
+chmod +x "$TARGET_DIR"/*
 chmod +x "$TARGET_DIR"/*.sh 2>/dev/null
 
 # 5. Создание системных ссылок (КРИТИЧЕСКИ ВАЖНО)
