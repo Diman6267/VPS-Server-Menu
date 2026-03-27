@@ -1,27 +1,36 @@
 #!/bin/bash
 source /usr/local/bin/_config_and_utils.sh
 
-# --- ФУНКЦИЯ УСТАНОВКИ ---
+CONF_PATH="/etc/hysteria/config.yaml"
+
+# Функция получения домена для SNI из URL маскировки
+get_sni() {
+    local masq=$(grep "url:" $CONF_PATH | awk '{print $2}')
+    echo "$masq" | sed -e 's|^[^/]*//||' -e 's|/.*$||'
+}
+
+# --- УСТАНОВКА ---
 function install_hysteria {
-    echo -e "${YELLOW}>>> Установка бинарного файла Hysteria 2...${NC}" 
+    echo -e "${YELLOW}>>> Установка Hysteria 2...${NC}" 
     bash <(curl -fsSL https://get.hy2.sh/)
 
-    echo -e "${BLUE}--- НАСТРОЙКА КОНФИГУРАЦИИ ---${NC}"
+    echo -e "${BLUE}--- ПЕРВИЧНАЯ НАСТРОЙКА ---${NC}"
     read -p "Введите UDP порт [443]: " HY_PORT
     HY_PORT=${HY_PORT:-443}
     
-    read -p "Введите пароль [или Enter для автогенерации]: " HY_PASS
+    read -p "Имя первого пользователя [admin]: " HY_USER
+    HY_USER=${HY_USER:-admin}
+
+    read -p "Пароль [Enter для автогенерации]: " HY_PASS
     HY_PASS=${HY_PASS:-$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 12)}
 
-    read -p "Сайт для маскировки (masquerade) [https://www.bing.com]: " HY_MASQ
-    HY_MASQ=${HY_MASQ:-https://www.bing.com}
+    read -p "Сайт маскировки [https://www.google.com]: " HY_MASQ
+    HY_MASQ=${HY_MASQ:-https://www.google.com}
 
-    # Генерация сертификатов
     mkdir -p /etc/hysteria/
-    openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
+    openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$(echo $HY_MASQ | sed -e 's|^[^/]*//||' -e 's|/.*$||')" -days 3650 2>/dev/null
 
-    # Создание конфига
-    cat <<EOF > /etc/hysteria/config.yaml
+    cat <<EOF > $CONF_PATH
 listen: :$HY_PORT
 auth:
   type: password
@@ -36,45 +45,84 @@ masquerade:
     rewriteHost: true
 EOF
 
-    # UFW и запуск
     ufw allow $HY_PORT/udp
     systemctl enable --now hysteria-server.service
     systemctl restart hysteria-server.service
-    
-    echo -e "${GREEN}✅ Hysteria 2 настроена! Пароль: $HY_PASS, Порт: $HY_PORT, Маскировка: $HY_MASQ${NC}"
+    echo -e "${GREEN}✅ Hysteria 2 установлена и запущена!${NC}"
 }
 
-# --- ФУНКЦИЯ РЕДАКТИРОВАНИЯ MASQUERADE ---
-function edit_masquerade {
-    if [ ! -f /etc/hysteria/config.yaml ]; then
-        echo -e "${RED}❌ Конфиг не найден. Сначала установите Hysteria.${NC}"
-        return
-    fi
+# --- ИЗМЕНЕНИЕ НАСТРОЕК (Порт и Маскировка) ---
+function edit_settings {
+    if [ ! -f $CONF_PATH ]; then echo -e "${RED}Сначала установите Hysteria!${NC}"; return; fi
 
-    current_masq=$(grep "url:" /etc/hysteria/config.yaml | awk '{print $2}')
-    echo -e "${CYAN}Текущая маскировка: ${YELLOW}$current_masq${NC}"
-    read -p "Введите новый URL для маскировки (с https://): " NEW_MASQ
+    echo -e "${YELLOW}1) Изменить порт${NC}"
+    echo -e "${YELLOW}2) Изменить маскировку (Masquerade)${NC}"
+    read -p "Выбор: " set_choice
+
+    case $set_choice in
+        1)
+            old_port=$(grep "listen:" $CONF_PATH | cut -d: -f3)
+            read -p "Новый UDP порт: " new_port
+            sed -i "s|listen: :$old_port|listen: :$new_port|" $CONF_PATH
+            ufw delete allow $old_port/udp
+            ufw allow $new_port/udp
+            ;;
+        2)
+            read -p "Новый URL маскировки (с https://): " new_masq
+            sed -i "s|url:.*|url: $new_masq|" $CONF_PATH
+            ;;
+    esac
+    systemctl restart hysteria-server.service
+    echo -e "${GREEN}✅ Настройки обновлены.${NC}"
+}
+
+# --- УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (Пароль) ---
+function manage_users {
+    if [ ! -f $CONF_PATH ]; then echo -e "${RED}Сначала установите Hysteria!${NC}"; return; fi
     
-    if [ -z "$NEW_MASQ" ]; then
-        echo "Отмена."
-    else
-        sed -i "s|url:.*|url: $NEW_MASQ|" /etc/hysteria/config.yaml
+    current_pass=$(grep "password:" $CONF_PATH | awk '{print $2}')
+    echo -e "${CYAN}Текущий пароль: ${YELLOW}$current_pass${NC}"
+    read -p "Введите новый пароль: " new_pass
+    if [ -n "$new_pass" ]; then
+        sed -i "s|password:.*|password: $new_pass|" $CONF_PATH
         systemctl restart hysteria-server.service
-        echo -e "${GREEN}✅ Маскировка изменена на $NEW_MASQ и сервис перезапущен.${NC}"
+        echo -e "${GREEN}✅ Пароль изменен.${NC}"
     fi
 }
 
-# --- ФУНКЦИЯ УДАЛЕНИЯ ---
-function remove_hysteria {
-    echo -e "${RED}⚠️ Удаление Hysteria 2...${NC}"
-    # Официальный деинсталлятор
-    bash <(curl -fsSL https://get.hy2.sh/) --uninstall
-    # Чистим хвосты
-    rm -rf /etc/hysteria
-    echo -e "${GREEN}✅ Бинарник, конфиги и сертификаты удалены.${NC}"
+# --- ВЫВОД ДАННЫХ ---
+function show_connection {
+    if [ ! -f $CONF_PATH ]; then echo -e "${RED}Конфиг не найден!${NC}"; return; fi
+    
+    local PASS=$(grep "password:" $CONF_PATH | awk '{print $2}')
+    local PORT=$(grep "listen:" $CONF_PATH | cut -d: -f3)
+    local IP=$(curl -s https://ifconfig.me)
+    local SNI=$(get_sni)
+    
+    local LINK="hysteria2://$PASS@$IP:$PORT/?insecure=1&sni=$SNI#Hysteria2"
+    
+    echo -e "${GREEN}--- ДАННЫЕ ПОДКЛЮЧЕНИЯ ---${NC}"
+    echo -e "IP: ${CYAN}$IP${NC}"
+    echo -e "Порт: ${CYAN}$PORT${NC}"
+    echo -e "Пароль: ${CYAN}$PASS${NC}"
+    echo -e "SNI/Host: ${CYAN}$SNI${NC}"
+    echo -e "--------------------------"
+    echo -e "${YELLOW}$LINK${NC}"
+    echo "--------------------------"
+    qrencode -t ansiutf8 "$LINK"
 }
 
-# --- ОСНОВНОЕ МЕНЮ МОДУЛЯ ---
+# --- УДАЛЕНИЕ ---
+function remove_hysteria {
+    read -p "Вы точно хотите полностью удалить Hysteria 2? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        bash <(curl -fsSL https://get.hy2.sh/) --uninstall
+        rm -rf /etc/hysteria
+        echo -e "${GREEN}✅ Сервис и файлы удалены.${NC}"
+    fi
+}
+
+# --- МЕНЮ ---
 while true; do
     clear
     echo -e "${CYAN}======================================================${NC}"
@@ -84,13 +132,14 @@ while true; do
     STATUS_HYS=$(systemctl is-active hysteria-server.service 2>/dev/null)
     STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
     
-    echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
+    echo -e "Текущий статус: [${STATUS_DISPLAY}]"
     echo -e "------------------------------------------------------"
-    echo -e "1) Установить Hysteria 2 (с нуля)"
+    echo -e "1) Установить Hysteria 2"
     echo -e "2) Статус / Запуск / Стоп / Рестарт"
-    echo -e "3) Изменить Masquerade (маскировку)"
-    echo -e "4) Показать данные для подключения / QR-код"
-    echo -e "5) Удалить Hysteria 2 полностью"
+    echo -e "3) Настройка сервера (Порт, Маскировка)"
+    echo -e "4) Изменить пароль пользователя"
+    echo -e "5) Показать ссылку и QR-код"
+    echo -e "6) Удалить Hysteria 2"
     echo -e "X) Назад в главное меню"
     echo -e "------------------------------------------------------"
 
@@ -98,17 +147,10 @@ while true; do
     case $choice in
         1) install_hysteria ;;
         2) manage_service_status_restart hysteria-server.service ;;
-        3) edit_masquerade ;;
-        4) 
-            # Вывод ссылки и QR (логику берем из инсталла)
-            PASS=$(grep "password:" /etc/hysteria/config.yaml | awk '{print $2}')
-            PORT=$(grep "listen:" /etc/hysteria/config.yaml | cut -d: -f3)
-            IP=$(curl -s https://ifconfig.me)
-            LINK="hysteria2://$PASS@$IP:$PORT/?insecure=1&sni=bing.com#Hysteria2"
-            echo -e "${YELLOW}Ссылка: ${NC}$LINK"
-            qrencode -t ansiutf8 "$LINK"
-            read -p "Нажмите Enter..." ;;
-        5) remove_hysteria ;;
+        3) edit_settings ;;
+        4) manage_users ;;
+        5) show_connection; read -p "Enter..." ;;
+        6) remove_hysteria ;;
         [Xx]) break ;;
     esac
 done
