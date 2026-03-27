@@ -12,7 +12,7 @@ function install_hysteria {
     echo -e "${BLUE}======================================================${NC}"
     echo -e "${BLUE}       ⚙️  ПЕРВИЧНАЯ НАСТРОЙКА СЕРВЕРА               ${NC}"
     echo -e "${BLUE}======================================================${NC}"
-
+    ufw allow 80/tcp && ufw allow 443/tcp
     read -p "Введите UDP порт [8443]: " HY_PORT
     HY_PORT=${HY_PORT:-8443}
 
@@ -66,7 +66,8 @@ masquerade:
     rewriteHost: true
 EOF
     fi
-
+chmod +x /etc/hysteria/server.crt
+chmod +x /etc/hysteria/server.key
     # Создаем базовый passwords.json для твоего скрипта пользователей
     echo '["12345678"]' > /etc/hysteria/passwords.json
 
