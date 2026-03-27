@@ -47,7 +47,14 @@ if [ -f "$TARGET_DIR/_config_and_utils.sh" ]; then
     # Делаем ссылку вместо копирования, чтобы изменения в репозитории сразу работали
     ln -sf "$TARGET_DIR/_config_and_utils.sh" /usr/local/bin/_config_and_utils.sh
 fi
-
+# 7. Настройка автозапуска при входе в систему
+echo -e "${YELLOW}>>> Настройка автозапуска меню...${NC}"
+if ! grep -q "server-menu" ~/.bashrc; then
+    echo -e "\n# Автозапуск основного меню\nif [[ -t 0 ]]; then server-menu; fi" >> ~/.bashrc
+    echo -e "${GREEN}✓ Автозапуск добавлен в ~/.bashrc${NC}"
+else
+    echo -e "${YELLOW}! Автозапуск уже настроен${NC}"
+fi
 echo -e "${GREEN}======================================================"
 echo -e "✅ УСТАНОВКА ЗАВЕРШЕНА УСПЕШНО!"
 echo -e "------------------------------------------------------"
