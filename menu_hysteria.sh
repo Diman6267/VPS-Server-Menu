@@ -46,7 +46,19 @@ function install_hysteria {
     # Генерируем конфиг в зависимости от выбора
     if [ "$CERT_TYPE" == "1" ]; then
         read -p "Введите ваш домен (напр. domain.tech): " HY_DOMAIN
-        read -p "Введите email для ACME: " HY_EMAIL
+        echo -e "${YELLOW}Введите email для ACME (формат: admin@mail.com)${NC}"
+read -p "Email [admin@$HY_DOMAIN]: " HY_EMAIL
+
+# Если нажал Enter, создаем почту на базе твоего же домена
+if [[ -z "$HY_EMAIL" ]]; then
+    HY_EMAIL="admin@$HY_DOMAIN"
+fi
+
+# Простейшая проверка на валидность (наличие @ и точки)
+if [[ ! "$HY_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+    echo -e "${RED}⚠️ Ошибка: формат email неверный. Использую admin@$HY_DOMAIN${NC}"
+    HY_EMAIL="admin@$HY_DOMAIN"
+fi
         cat <<EOF > /etc/hysteria/config.yaml
 listen: :$HY_PORT
 acme:
