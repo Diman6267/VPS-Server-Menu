@@ -127,7 +127,7 @@ fi
     fi
     
     # Проверка MTProxy (по имени контейнера в Docker)
-    if sudo docker ps --format '{{.Names}}' | grep -q "mtproto-proxy"; then 
+    if command -v docker &> /dev/null && sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "mtproto-proxy"; then 
         status_mtp="${GREEN}РАБОТАЕТ${NC}"
     else 
         status_mtp="${RED}Остановлен${NC}"
