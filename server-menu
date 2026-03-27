@@ -153,7 +153,7 @@ fi
 while true; do
     check_for_updates
     show_menu
-    PROMPT=$(echo -e "${CYAN}Ваш выбор [1-5, X]: ${NC}")
+    PROMPT=$(echo -e "${CYAN}Ваш выбор: ${NC}")
     read -p "$PROMPT" choice
 
     case $choice in
