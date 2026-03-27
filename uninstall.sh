@@ -28,8 +28,6 @@ if [ -d "$TARGET_DIR" ]; then
         echo -e "${YELLOW}! Директория сохранена${NC}"
     fi
 fi
-Bash
-
 # 4. Удаление автозапуска из .bashrc
 echo -e "${YELLOW}>>> Очистка автозапуска из ~/.bashrc...${NC}"
 if grep -q "server-menu" ~/.bashrc; then
