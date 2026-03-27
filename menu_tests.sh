@@ -143,7 +143,12 @@ fi
 
 			8)
                 echo -e "${CYAN}>>> Запуск теста на процессор...${NC}"
-                sysbench cpu run --threads=1
+                # Проверка sysbench прямо перед запуском
+    if ! command -v sysbench &> /dev/null; then
+        echo -e "${YELLOW}>>> sysbench не найден. Установка...${NC}"
+        sudo apt update && sudo apt install -y sysbench
+    fi
+				sysbench cpu run --threads=1
                 ;;	
             9) run_scanner ;;
             [Xx]) return ;;
