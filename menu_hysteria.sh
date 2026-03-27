@@ -144,13 +144,13 @@ function remove_hysteria {
 }
 
 function display_single_hysteria_uri {
-    local user=$1
-    local pass=$2
-    
-    # 1. Пытаемся достать домен из блока acme (если вдруг он там есть)
+    local username=$1
+    local password=$2
+
+    # 1. Пытаемся вытащить домен из блока acme
     local DOMAIN=$(grep -A 1 "domains:" "$HYSTERIA_CONFIG" | grep "-" | sed 's/^[[:space:]]*- //;s/\"//g' | tr -d '\r')
     
-    # 2. Достаем порт
+    # 2. Достаем порт из конфига
     local PORT=$(grep "listen:" "$HYSTERIA_CONFIG" | awk -F ':' '{print $NF}' | tr -d ' "')
     PORT=${PORT:-8443}
 
@@ -158,21 +158,36 @@ function display_single_hysteria_uri {
     local PARAMS
 
     if [[ -n "$DOMAIN" ]]; then
-        # Режим ACME (Домен)
+        # РЕЖИМ ACME (Домен)
         FINAL_ADDR="$DOMAIN"
         PARAMS="sni=$DOMAIN"
     else
-        # Режим Самоподписанный (IP)
+        # РЕЖИМ САМОПОДПИСАННЫЙ (IP)
         FINAL_ADDR=$(curl -s --max-time 2 https://ifconfig.me)
-        # Добавляем insecure=1, иначе не подключится! 
-        # SNI можно поставить любой популярный для маскировки
+        # Добавляем insecure=1, иначе QR-код не заработает на телефоне
+        # Маскировку (sni) ставим стандартную, например google.com
         PARAMS="insecure=1&sni=google.com"
     fi
 
-    local hy_uri="hysteria2://${user}:${pass}@${FINAL_ADDR}:${PORT}/?${PARAMS}"
+    # Сборка финальной ссылки
+    local HY_URI="hysteria2://${username}:${password}@${FINAL_ADDR}:${PORT}/?${PARAMS}"
 
-    echo -e "\n${GREEN}✅ ССЫЛКА (Самоподписанный режим):${NC}"
-    echo -e "${YELLOW}${hy_uri}${NC}"
+    echo -e "\n${CYAN}==================================================${NC}"
+    echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $username:${NC}"
+    
+    # Генерация QR-кода
+    if command -v qrencode &> /dev/null; then
+        echo -e "\n>>> QR-код:"
+        # -t ANSI256 делает код компактным и читаемым в терминале
+        qrencode -t ANSI256 "$HY_URI"
+    else
+        echo -e "${RED}❌ qrencode не установлен. Установите: apt install qrencode${NC}"
+    fi
+
+    echo -e "--------------------------------------------------"
+    echo -e "${BLUE}🔗 ССЫЛКА (скопируйте):${NC}"
+    echo -e "${YELLOW}$HY_URI${NC}"
+    echo -e "${CYAN}==================================================${NC}\n"
 }
 
 function generate_hysteria_uri {
