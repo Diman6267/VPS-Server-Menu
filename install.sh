@@ -9,8 +9,8 @@ NC='\033[0m'
 echo -e "${YELLOW}>>> Начало установки VPS-Server-Menu...${NC}"
 
 # 1. Обновление системы и установка зависимостей
-echo -e "${YELLOW}>>> Установка необходимых пакетов (git, bc, jq, ufw, curl)...${NC}"
-apt update && apt install -y curl git bc jq ufw
+echo -e "${YELLOW}>>> Установка необходимых пакетов...${NC}"
+apt update && apt install -y curl git bc jq ufw qrencode
 
 # 2. Определяем рабочую директорию
 TARGET_DIR="/root/VPS-Server-Menu"
