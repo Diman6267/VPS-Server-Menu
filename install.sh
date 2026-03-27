@@ -4,13 +4,13 @@
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${YELLOW}>>> Начало установки VPS-Server-Menu...${NC}"
 
-# 1. Обновление системы и установка зависимостей
-echo -e "${YELLOW}>>> Установка необходимых пакетов (git, bc, jq)...${NC}"
-apt update && apt install -y git bc jq curl
+# 1. Обновление системы и установка зависимостей (Добавлен ufw)
+echo -e "${YELLOW}>>> Установка необходимых пакетов (git, bc, jq, ufw)...${NC}"
+apt update && apt install -y git bc jq curl ufw
 
 # 2. Определяем рабочую директорию
 TARGET_DIR="/root/VPS-Server-Menu"
@@ -23,7 +23,7 @@ if [ -d "$TARGET_DIR/.git" ]; then
     git reset --hard origin/main
 else
     echo -e "${YELLOW}>>> Клонирование репозитория...${NC}"
-    rm -rf "$TARGET_DIR" # Удаляем папку, если она была создана не через git
+    rm -rf "$TARGET_DIR"
     git clone https://github.com/Diman6267/VPS-Server-Menu.git "$TARGET_DIR"
 fi
 
@@ -32,31 +32,25 @@ echo -e "${YELLOW}>>> Установка прав на исполнение...${
 chmod +x "$TARGET_DIR/server-menu"
 chmod +x "$TARGET_DIR"/*.sh 2>/dev/null
 
-# 5. Создание символической ссылки (КРИТИЧЕСКИ ВАЖНО)
-# Теперь /usr/local/bin/server-menu всегда будет указывать на файл в репозитории
-echo -e "${YELLOW}>>> Создание системной ссылки /usr/local/bin/server-menu...${NC}"
+# 5. Создание системных ссылок (КРИТИЧЕСКИ ВАЖНО)
+echo -e "${YELLOW}>>> Создание системных ссылок для модулей...${NC}"
 ln -sf "$TARGET_DIR/server-menu" /usr/local/bin/server-menu
+ln -sf "$TARGET_DIR/menu_xui.sh" /usr/local/bin/menu_xui.sh
+ln -sf "$TARGET_DIR/menu_hysteria.sh" /usr/local/bin/menu_hysteria.sh
+ln -sf "$TARGET_DIR/menu_mtproxy.sh" /usr/local/bin/menu_mtproxy.sh
+ln -sf "$TARGET_DIR/menu_tests.sh" /usr/local/bin/menu_tests.sh
+ln -sf "$TARGET_DIR/menu_setup.sh" /usr/local/bin/menu_setup.sh
+ln -sf "$TARGET_DIR/ipv6-menu" /usr/local/bin/ipv6-menu
 
-# Дополнительно прописываем ссылки для модулей, если они вызываются напрямую
-# Например, для IPv6 меню
-if [ -f "$TARGET_DIR/ipv6-menu" ]; then
-    ln -sf "$TARGET_DIR/ipv6-menu" /usr/local/bin/ipv6-menu
-    chmod +x /usr/local/bin/ipv6-menu
-fi
-echo -e "${YELLOW}>>> Создание ссылок для всех модулей...${NC}"
-for file in /root/VPS-Server-Menu/*.sh; do
-    filename=$(basename "$file")
-    ln -sf "$file" "/usr/local/bin/$filename"
-done
-[ -f /root/VPS-Server-Menu/ipv6-menu ] && ln -sf /root/VPS-Server-Menu/ipv6-menu /usr/local/bin/ipv6-menu
-# 6. Копирование конфигов (если есть файл _config_and_utils.sh)
+# 6. Настройка конфигурационного файла (Исправлено дублирование)
 if [ -f "$TARGET_DIR/_config_and_utils.sh" ]; then
-    cp "$TARGET_DIR/_config_and_utils.sh" /usr/local/bin/_config_and_utils.sh
-    chmod +x /usr/local/bin/_config_and_utils.sh
+    # Делаем ссылку вместо копирования, чтобы изменения в репозитории сразу работали
+    ln -sf "$TARGET_DIR/_config_and_utils.sh" /usr/local/bin/_config_and_utils.sh
 fi
 
 echo -e "${GREEN}======================================================"
 echo -e "✅ УСТАНОВКА ЗАВЕРШЕНА УСПЕШНО!"
 echo -e "------------------------------------------------------"
-echo -e "Теперь вы можете запустить меню командой: ${YELLOW}server-menu${NC}"
+echo -e "Добавлен пакет: ufw (не забудьте настроить правила)"
+echo -e "Запуск меню: ${YELLOW}server-menu${NC}"
 echo -e "======================================================${NC}"
