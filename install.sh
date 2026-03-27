@@ -8,10 +8,8 @@ NC='\033[0m'
 
 echo -e "${YELLOW}>>> Начало установки VPS-Server-Menu...${NC}"
 
-# 1. Обновление системы и установка зависимостей (Добавлен ufw)
+# 1. Обновление системы и установка зависимостей
 echo -e "${YELLOW}>>> Установка необходимых пакетов (git, bc, jq, ufw, curl)...${NC}"
-sudo apt update
-apt install -y software-properties-common
 apt update && apt install -y curl git bc jq ufw
 
 # 2. Определяем рабочую директорию
