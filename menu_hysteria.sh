@@ -144,27 +144,35 @@ function remove_hysteria {
 }
 
 function display_single_hysteria_uri {
-    local username=$1
-    local password=$2
-    local domain=$(get_hy2_domain)
-    local port=$(get_hy2_port)
-
-    # Формируем ссылку. SNI обязателен для ACME.
-    local hy_uri="hysteria2://${username}:${password}@${domain}:${port}/?sni=${domain}"
-
-    echo -e "\n${CYAN}==================================================${NC}"
-    echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $username:${NC}"
+    local user=$1
+    local pass=$2
     
-    # Генерация QR-кода (если установлен qrencode)
-    if command -v qrencode &> /dev/null; then
-        echo -e "\n>>> QR-код:"
-        qrencode -t ANSI256 "$hy_uri"
+    # 1. Пытаемся достать домен из блока acme (если вдруг он там есть)
+    local DOMAIN=$(grep -A 1 "domains:" "$HYSTERIA_CONFIG" | grep "-" | sed 's/^[[:space:]]*- //;s/\"//g' | tr -d '\r')
+    
+    # 2. Достаем порт
+    local PORT=$(grep "listen:" "$HYSTERIA_CONFIG" | awk -F ':' '{print $NF}' | tr -d ' "')
+    PORT=${PORT:-8443}
+
+    local FINAL_ADDR
+    local PARAMS
+
+    if [[ -n "$DOMAIN" ]]; then
+        # Режим ACME (Домен)
+        FINAL_ADDR="$DOMAIN"
+        PARAMS="sni=$DOMAIN"
+    else
+        # Режим Самоподписанный (IP)
+        FINAL_ADDR=$(curl -s --max-time 2 https://ifconfig.me)
+        # Добавляем insecure=1, иначе не подключится! 
+        # SNI можно поставить любой популярный для маскировки
+        PARAMS="insecure=1&sni=google.com"
     fi
 
-    echo -e "--------------------------------------------------"
-    echo -e "${BLUE}🔗 ССЫЛКА (скопируйте):${NC}"
-    echo -e "${YELLOW}$hy_uri${NC}"
-    echo -e "${CYAN}==================================================${NC}\n"
+    local hy_uri="hysteria2://${user}:${pass}@${FINAL_ADDR}:${PORT}/?${PARAMS}"
+
+    echo -e "\n${GREEN}✅ ССЫЛКА (Самоподписанный режим):${NC}"
+    echo -e "${YELLOW}${hy_uri}${NC}"
 }
 
 function generate_hysteria_uri {
