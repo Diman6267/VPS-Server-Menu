@@ -173,6 +173,8 @@ EOF
             if [[ $confirm == [yY] ]]; then
                 sudo docker stop mtproto-proxy &>/dev/null
                 sudo docker rm mtproto-proxy &>/dev/null
+                sudo docker rmi telegrammessenger/proxy:latest
+                sudo rm -rf /etc/server-menu/mtproxy.conf /etc/server-menu/mtproxy_users.list
                 sudo rm -f $USER_DB $CONFIG_FILE
                 echo -e "${RED}Всё удалено.${NC}"; sleep 2
             fi
