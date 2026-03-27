@@ -28,7 +28,8 @@ function install_hysteria {
     echo -e "${BLUE}======================================================${NC}"
     echo -e "${BLUE}       ⚙️  ПЕРВИЧНАЯ НАСТРОЙКА СЕРВЕРА               ${NC}"
     echo -e "${BLUE}======================================================${NC}"
-    ufw allow 80/tcp && ufw allow 443/tcp
+    ufw allow 80/tcp >/dev/null 2>&1
+    ufw allow 443/tcp >/dev/null 2>&1
     read -p "Введите UDP порт [8443]: " HY_PORT
     HY_PORT=${HY_PORT:-8443}
 
@@ -66,8 +67,6 @@ EOF
     else
         echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
         openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
-        chown -R hysteria:hysteria /etc/hysteria
-        chmod 600 /etc/hysteria/server.key
         cat <<EOF > /etc/hysteria/config.yaml
 listen: :$HY_PORT
 tls:
@@ -86,7 +85,11 @@ EOF
     fi
     # Создаем базовый passwords.json для твоего скрипта пользователей
     echo '["12345678"]' > /etc/hysteria/passwords.json
-
+# ВАЖНО: Применяем права доступа для всей папки (для любого типа конфига)
+if id "hysteria" &>/dev/null; then
+        chown -R hysteria:hysteria /etc/hysteria
+        chmod 600 /etc/hysteria/server.key 2>/dev/null
+    fi
     # Открываем порт в UFW и запускаем сервис
     if command -v ufw &> /dev/null; then
         ufw allow $HY_PORT/udp >/dev/null 2>&1
