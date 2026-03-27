@@ -46,7 +46,8 @@ function sync_mtp {
     else
         echo -e "${RED}⚠️ Нет активных ключей. Прокси остановлен.${NC}"
     fi
-    sleep 2
+    echo -e "${CYAN}Нажмите Enter, чтобы продолжить...${NC}"
+    read -r
 }
 
 function show_user_info {
@@ -177,7 +178,8 @@ EOF
                 sudo docker rmi telegrammessenger/proxy:latest
                 sudo rm -rf /etc/server-menu/mtproxy.conf /etc/server-menu/mtproxy_users.list
                 sudo rm -f $USER_DB $CONFIG_FILE
-                echo -e "${RED}Всё удалено.${NC}"; sleep 2
+                echo -e "${RED}Всё удалено.${NC}"; echo -e "${CYAN}Нажмите Enter, чтобы продолжить...${NC}"
+    read -r
             fi
             ;;
 
