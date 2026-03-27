@@ -78,7 +78,12 @@ masquerade:
 EOF
     else
         echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
-        openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
+        # Добавляем запрос SNI
+        read -p "Введите SNI для сертификата [google.com]: " HY_SNI
+        HY_SNI=${HY_SNI:-google.com}
+        
+        # Используем $HY_SNI в поле /CN=
+        openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$HY_SNI" -days 3650 2>/dev/null
         cat <<EOF > /etc/hysteria/config.yaml
 listen: :$HY_PORT
 tls:
