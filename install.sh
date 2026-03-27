@@ -10,6 +10,7 @@ echo -e "${YELLOW}>>> Начало установки VPS-Server-Menu...${NC}"
 
 # 1. Обновление системы и установка зависимостей (Добавлен ufw)
 echo -e "${YELLOW}>>> Установка необходимых пакетов (git, bc, jq, ufw, curl)...${NC}"
+sudo apt update
 apt install -y software-properties-common
 apt update && apt install -y curl git bc jq ufw
 
