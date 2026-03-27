@@ -151,6 +151,7 @@ while true; do
         echo -e "${GREEN}✅ Docker установлен и добавлен в автозагрузку!${NC}"
     fi
 }
+            check_docker
             draw_header
             det_ip=$(get_my_ip)
             read -p "Подтвердите IPv4 ($det_ip): " p_ip; MTP_IP=${p_ip:-$det_ip}
