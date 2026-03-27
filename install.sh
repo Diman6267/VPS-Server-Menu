@@ -43,7 +43,12 @@ if [ -f "$TARGET_DIR/ipv6-menu" ]; then
     ln -sf "$TARGET_DIR/ipv6-menu" /usr/local/bin/ipv6-menu
     chmod +x /usr/local/bin/ipv6-menu
 fi
-
+echo -e "${YELLOW}>>> Создание ссылок для всех модулей...${NC}"
+for file in /root/VPS-Server-Menu/*.sh; do
+    filename=$(basename "$file")
+    ln -sf "$file" "/usr/local/bin/$filename"
+done
+[ -f /root/VPS-Server-Menu/ipv6-menu ] && ln -sf /root/VPS-Server-Menu/ipv6-menu /usr/local/bin/ipv6-menu
 # 6. Копирование конфигов (если есть файл _config_and_utils.sh)
 if [ -f "$TARGET_DIR/_config_and_utils.sh" ]; then
     cp "$TARGET_DIR/_config_and_utils.sh" /usr/local/bin/_config_and_utils.sh
