@@ -8,7 +8,79 @@ source /usr/local/bin/_config_and_utils.sh
 function install_hysteria {
     echo -e "${YELLOW}>>> Установка Hysteria 2...${NC}" 
     bash <(curl -fsSL https://get.hy2.sh/)
-    echo -e "${GREEN}✅ Установка Hysteria 2 завершена.${NC}"
+
+    echo -e "${BLUE}======================================================${NC}"
+    echo -e "${BLUE}       ⚙️  ПЕРВИЧНАЯ НАСТРОЙКА СЕРВЕРА               ${NC}"
+    echo -e "${BLUE}======================================================${NC}"
+
+    read -p "Введите UDP порт [8443]: " HY_PORT
+    HY_PORT=${HY_PORT:-8443}
+
+    read -p "URL маскировки [https://yahoo.com/]: " HY_MASQ
+    HY_MASQ=${HY_MASQ:-https://yahoo.com/}
+
+    echo -e "\n${CYAN}Выберите тип сертификата:${NC}"
+    echo "1) Свой домен (авто-выпуск через ACME/Let's Encrypt)"
+    echo "2) Самоподписанный (без домена, по IP)"
+    read -p "Ваш выбор [1-2]: " CERT_TYPE
+
+    mkdir -p /etc/hysteria/
+
+    # Генерируем конфиг в зависимости от выбора
+    if [ "$CERT_TYPE" == "1" ]; then
+        read -p "Введите ваш домен (напр. domain.tech): " HY_DOMAIN
+        read -p "Введите email для ACME: " HY_EMAIL
+        cat <<EOF > /etc/hysteria/config.yaml
+listen: :$HY_PORT
+acme:
+  domains:
+    - $HY_DOMAIN
+  email: $HY_EMAIL
+  type: http
+auth:
+  type: userpass
+  userpass:
+    Admin: "12345678"
+masquerade:
+  type: proxy
+  proxy:
+    url: $HY_MASQ
+    rewriteHost: true
+EOF
+    else
+        echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
+        openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
+        cat <<EOF > /etc/hysteria/config.yaml
+listen: :$HY_PORT
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+auth:
+  type: userpass
+  userpass:
+    Admin: "12345678"
+masquerade:
+  type: proxy
+  proxy:
+    url: $HY_MASQ
+    rewriteHost: true
+EOF
+    fi
+
+    # Создаем базовый passwords.json для твоего скрипта пользователей
+    echo '["12345678"]' > /etc/hysteria/passwords.json
+
+    # Открываем порт в UFW и запускаем сервис
+    if command -v ufw &> /dev/null; then
+        ufw allow $HY_PORT/udp >/dev/null 2>&1
+    fi
+    systemctl enable --now hysteria-server.service
+    systemctl restart hysteria-server.service
+
+    echo -e "${GREEN}✅ Установка Hysteria 2 и базовая настройка завершена.${NC}"
+    echo -e "${YELLOW}Создан тестовый пользователь: Admin / 12345678${NC}"
+    echo -e "Вы можете изменить его в меню управления пользователями."
+    read -p "Нажмите Enter для продолжения..."
 }
 
 function remove_hysteria {
@@ -31,10 +103,26 @@ function remove_hysteria {
 
     if [ "$confirmed" = true ]; then
         echo -e "${YELLOW}Запускаю удаление...${NC}"
+        
+        # Вызываем официальный скрипт удаления
         bash <(curl -fsSL https://get.hy2.sh/) --remove
+        
+        echo ""
+        read -p "$(echo -e "${CYAN}Выполнить автоматическую очистку конфигурации и хвостов (как рекомендует скрипт)? [y/N]: ${NC}")" cleanup_confirm
+        if [[ "$cleanup_confirm" =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}Удаление конфигурации и systemd файлов...${NC}"
+            rm -rf /etc/hysteria
+            userdel -r hysteria 2>/dev/null
+            rm -f /etc/systemd/system/multi-user.target.wants/hysteria-server.service
+            rm -f /etc/systemd/system/multi-user.target.wants/hysteria-server@*.service
+            systemctl daemon-reload
+            echo -e "${GREEN}✅ Дополнительная очистка завершена.${NC}"
+        else
+            echo -e "${YELLOW}Дополнительная очистка пропущена.${NC}"
+        fi
+
         echo -e "${GREEN}✅ Hysteria 2 успешно удалена.${NC}"
-    else
-        echo -e "${GREEN}Операция отменена. Служба Hysteria не была удалена.${NC}"
+        read -p "Нажмите Enter для продолжения..."
     fi
 }
 
