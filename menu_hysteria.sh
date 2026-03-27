@@ -4,7 +4,23 @@ source /usr/local/bin/_config_and_utils.sh
 # ----------------------------------------------------------------------
 # HYSTERIA: УСТАНОВКА / УДАЛЕНИЕ / ПОЛЬЗОВАТЕЛИ (Вынесенный блок)
 # ----------------------------------------------------------------------
+# Функция для автоматического получения домена из ACME или IP
+function get_hy2_domain {
+    # Ищем строку после "domains:", убираем лишние пробелы, тире и кавычки
+    local DOMAIN=$(grep -A 1 "domains:" "$HYSTERIA_CONFIG" | grep "-" | sed 's/^[[:space:]]*- //;s/\"//g;s/[[:space:]]*$//')
+    
+    if [[ -z "$DOMAIN" ]]; then
+        # Если домен в ACME не найден, берем внешний IP
+        DOMAIN=$(curl -s --max-time 2 https://ifconfig.me || echo "your_server_ip")
+    fi
+    echo "$DOMAIN"
+}
 
+# Функция для получения порта
+function get_hy2_port {
+    local PORT=$(grep "listen:" "$HYSTERIA_CONFIG" | awk -F ':' '{print $NF}' | tr -d ' "')
+    echo "${PORT:-8443}"
+}
 function install_hysteria {
     echo -e "${YELLOW}>>> Установка Hysteria 2...${NC}" 
     bash <(curl -fsSL https://get.hy2.sh/)
@@ -50,6 +66,8 @@ EOF
     else
         echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
         openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=bing.com" -days 3650 2>/dev/null
+        chown -R hysteria:hysteria /etc/hysteria
+        chmod 600 /etc/hysteria/server.key
         cat <<EOF > /etc/hysteria/config.yaml
 listen: :$HY_PORT
 tls:
@@ -66,8 +84,6 @@ masquerade:
     rewriteHost: true
 EOF
     fi
-chmod +x /etc/hysteria/server.crt
-chmod +x /etc/hysteria/server.key
     # Создаем базовый passwords.json для твоего скрипта пользователей
     echo '["12345678"]' > /etc/hysteria/passwords.json
 
@@ -128,37 +144,27 @@ function remove_hysteria {
 }
 
 function display_single_hysteria_uri {
-    SELECTED_USER=$1
-    USER_PASS=$2
+    local username=$1
+    local password=$2
+    local domain=$(get_hy2_domain)
+    local port=$(get_hy2_port)
 
-    SERVER_PORT=$(grep '^listen:' "$HYSTERIA_CONFIG" | awk '{print $NF}' | sed 's/:/ /g' | awk '{print $NF}')
-    SERVER_PORT=${SERVER_PORT:-8443}
-    SERVER_ADDR=$(grep -A 1 'domains:' "$HYSTERIA_CONFIG" | tail -n 1 | sed -e 's/^[[:space:]]*//' -e 's/- //')
-    SERVER_ADDR=${SERVER_ADDR:-<IP или Домен>}
-    SNI_HOST=$SERVER_ADDR
+    # Формируем ссылку. SNI обязателен для ACME.
+    local hy_uri="hysteria2://${username}:${password}@${domain}:${port}/?sni=${domain}"
+
+    echo -e "\n${CYAN}==================================================${NC}"
+    echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $username:${NC}"
     
-    if [ "$SERVER_ADDR" == "<IP или Домен>" ]; then
-        echo -e "${RED}❌ ВНИМАНИЕ: Не удалось автоматически найти домен в конфиге.${NC}"
+    # Генерация QR-кода (если установлен qrencode)
+    if command -v qrencode &> /dev/null; then
+        echo -e "\n>>> QR-код:"
+        qrencode -t ANSI256 "$hy_uri"
     fi
 
-    HYSTERIA_URI="hysteria2://$SELECTED_USER:$USER_PASS@$SERVER_ADDR:$SERVER_PORT/?sni=$SNI_HOST"
-    
-    echo -e "\n${GREEN}==================================================${NC}"
-    echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $SELECTED_USER:${NC}"
-    
-    # ИСПРАВЛЕНИЕ: Проверка и установка qrencode
-    if check_and_install_qrencode; then 
-        echo -e "\n${CYAN}>>> QR-код:${NC}"
-        echo "$HYSTERIA_URI" | qrencode -t UTF8
-        echo -e "${CYAN}--------------------------------------------------${NC}"
-    else
-        echo -e "${YELLOW}💡 QR-код не будет отображен.${NC}"
-    fi
-    # -----------------------------------------------
-    
-    echo -e "${CYAN}🔗 ССЫЛКА (скопируйте):${NC}"
-    echo -e "$HYSTERIA_URI"
-    echo -e "${GREEN}==================================================${NC}"
+    echo -e "--------------------------------------------------"
+    echo -e "${BLUE}🔗 ССЫЛКА (скопируйте):${NC}"
+    echo -e "${YELLOW}$hy_uri${NC}"
+    echo -e "${CYAN}==================================================${NC}\n"
 }
 
 function generate_hysteria_uri {
