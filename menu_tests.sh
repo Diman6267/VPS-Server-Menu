@@ -91,11 +91,10 @@ function run_tests_menu {
         echo -e "${YELLOW}3) Censorcheck для серверов РФ${NC}"
         echo -e "${YELLOW}4) Тест до российских iPerf3 серверов${NC}"
         echo -e "${YELLOW}5) YABS Benchmark${NC}"
-		echo -e "${YELLOW}6) Проверка IP сервера на блокировки зарубежными сервисами${NC}"
+		echo -e "${YELLOW}6) IPQuality. Проверка IP сервера на блокировки зарубежными сервисами${NC}"
 		echo -e "${YELLOW}7) Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
-		echo -e "${YELLOW}8) IPQuality${NC}"
-		echo -e "${YELLOW}9) Тест на процессор${NC}"
-        echo -e "${YELLOW}10) Запуск Realitls Scaner${NC}"
+		echo -e "${YELLOW}8) Тест на процессор${NC}"
+        echo -e "${YELLOW}9) Запуск Realitls Scaner${NC}"
         echo -e "${RED}X) Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
@@ -135,21 +134,18 @@ fi
                 ;;
 			6)
                 echo -e "${CYAN}>>> Проверка IP сервера на блокировки зарубежными сервисами...${NC}"
-                bash <(curl -Ls IP.Check.Place) -l en
+                 bash <(curl -Ls https://Check.Place) -EI
                 ;;
 			7)
                 echo -e "${CYAN}>>> Параметры сервера и проверка скорости к зарубежным провайдерам...${NC}"
                 wget -qO- bench.sh | bash
                 ;;
+
 			8)
-                echo -e "${CYAN}>>> Запуск IPQuality...${NC}"
-                bash <(curl -Ls https://Check.Place) -EI
-                ;;
-			9)
                 echo -e "${CYAN}>>> Запуск теста на процессор...${NC}"
                 sysbench cpu run --threads=1
                 ;;	
-            10) run_scanner ;;
+            9) run_scanner ;;
             [Xx]) return ;;
             *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
         esac
