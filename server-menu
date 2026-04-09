@@ -25,7 +25,7 @@ function check_for_updates {
         echo -e "📢 ${GREEN}ДОСТУПНО ОБНОВЛЕНИЕ!${NC}"
         echo -e "${YELLOW}------------------------------------------------------"
         echo -e "${CYAN}Что нового:${NC}"
-        git log HEAD..origin/main --oneline -n 3 | sed 's/^[a-z0-9]* //;s/^/- /'
+        git log HEAD..origin/main --pretty=format:"- %s%n  %b" -n 3
         echo -e "${YELLOW}------------------------------------------------------"
         echo -e "Нажмите ${GREEN}[7]${NC} в меню для автообновления."
         echo -e "======================================================${NC}"
