@@ -33,8 +33,14 @@ function install_hysteria {
     read -p "Введите UDP порт [8443]: " HY_PORT
     HY_PORT=${HY_PORT:-8443}
 
-    read -p "URL маскировки [https://yahoo.com/]: " HY_MASQ
-    HY_MASQ=${HY_MASQ:-https://yahoo.com/}
+    read -p "Сайт для маскировки (по умолчанию yahoo.com) [yahoo.com]: " HY_MASQ_INPUT
+    HY_MASQ_INPUT=${HY_MASQ_INPUT:-yahoo.com}
+    
+    # Очищаем ввод от http://, https:// и слешей на конце (если ввели случайно)
+    CLEAN_MASQ=$(echo "$HY_MASQ_INPUT" | sed -E 's~^(https?://)?([^/]+).*~\2~')
+    
+    # Формируем правильный URL для конфига
+    HY_MASQ="https://${CLEAN_MASQ}/"
 
     echo -e "\n${CYAN}Выберите тип сертификата:${NC}"
     echo "1) Свой домен (авто-выпуск через ACME/Let's Encrypt)"
@@ -78,9 +84,9 @@ masquerade:
 EOF
     else
         echo -e "${YELLOW}Генерация самоподписанного сертификата...${NC}"
-        # Запрашиваем SNI (маскировку)
-        read -p "Введите SNI для маскировки [google.com]: " HY_SNI
-        HY_SNI=${HY_SNI:-google.com}
+		# Запрашиваем SNI (маскировку)
+        read -p "Введите SNI для маскировки [$CLEAN_MASQ]: " HY_SNI
+        HY_SNI=${HY_SNI:-$CLEAN_MASQ}
         
         # Генерируем сертификат именно на этот домен
         openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$HY_SNI" -days 3650 2>/dev/null
@@ -166,6 +172,23 @@ function remove_hysteria {
     fi
 }
 
+# Функция для безопасного URL-кодирования спецсимволов
+function urlencode() {
+    local string="${1}"
+    local strlen=${#string}
+    local encoded=""
+    local pos c o
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9] ) o="${c}" ;;
+            * ) printf -v o '%%%02X' "'$c" ;;
+        esac
+        encoded+="${o}"
+    done
+    echo "${encoded}"
+}
+
 function display_single_hysteria_uri {
     local username=$1
     local password=$2
@@ -187,21 +210,21 @@ function display_single_hysteria_uri {
     else
         # РЕЖИМ САМОПОДПИСАННЫЙ (IP)
         FINAL_ADDR=$(curl -s --max-time 2 https://ifconfig.me)
-        # Добавляем insecure=1, иначе QR-код не заработает на телефоне
-        # Маскировку (sni) ставим стандартную, например google.com
         PARAMS="insecure=1&sni=$HY_SNI"
     fi
 
-    # Сборка финальной ссылки
-    local HY_URI="hysteria2://${username}:${password}@${FINAL_ADDR}:${PORT}/?${PARAMS}"
+    # Кодируем пользователя и пароль для безопасности URI
+    local safe_username=$(urlencode "$username")
+    local safe_password=$(urlencode "$password")
+
+    # Сборка финальной ссылки с безопасными значениями
+    local HY_URI="hysteria2://${safe_username}:${safe_password}@${FINAL_ADDR}:${PORT}/?${PARAMS}"
 
     echo -e "\n${CYAN}==================================================${NC}"
     echo -e "${GREEN}✅ ССЫЛКА HYSTERIA 2 ДЛЯ $username:${NC}"
     
-    # Генерация QR-кода
     if command -v qrencode &> /dev/null; then
         echo -e "\n>>> QR-код:"
-        # -t ANSI256 делает код компактным и читаемым в терминале
         qrencode -t ANSI256 "$HY_URI"
     else
         echo -e "${RED}❌ qrencode не установлен. Установите: apt install qrencode${NC}"
@@ -283,19 +306,26 @@ function manage_hysteria_users {
 
         case $choice in
             1)
-                read -p "Введите имя пользователя: " NEW_USER
-                if [[ "$NEW_USER" =~ [:\"] || -z "$NEW_USER" ]]; then
-                    echo -e "${RED}❌ Некорректное имя пользователя.${NC}"
-                    break
-                fi
+                read -p "Введите имя пользователя (Символы @, : и кавычки запрещены): " NEW_USER
+				# Запрещаем @, : и кавычки
+				if [[ "$NEW_USER" =~ [@:\"] || -z "$NEW_USER" ]]; then
+					echo -e "${RED}❌ Некорректное имя. Символы @, : и кавычки запрещены.${NC}"
+					break
+				fi
                 read -p "Сгенерировать пароль? [Y/n]: " GENERATE_PASS
               
                 if [[ "$GENERATE_PASS" =~ ^[Yy]$ || -z "$GENERATE_PASS" ]]; then
                     NEW_PASS=$(openssl rand -hex 8)
                     echo -e "${GREEN}Пароль: $NEW_PASS${NC}"
                 else
-                    read -p "Введите пароль: " NEW_PASS
-                fi
+                    read -p "Введите пароль (Символы @, : и кавычки запрещены.): " NEW_PASS
+					# Проверка ручного ввода пароля на запрещенные символы
+				if [[ "$NEW_PASS" =~ [@:\"] ]]; then
+					echo -e "${RED}❌ Некорректный пароль. Символы @, : и кавычки запрещены.${NC}"
+					break
+				fi
+               fi
+				
 
                 if [[ -z "$NEW_PASS" ]]; then echo -e "${RED}❌ Пароль пуст.${NC}"; break; fi
 
