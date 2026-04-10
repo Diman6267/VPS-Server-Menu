@@ -79,6 +79,13 @@ function draw_header {
 while true; do
     load_config
     draw_header
+    if sudo docker ps --format '{{.Names}}' | grep -q "mtproto-proxy"; then
+    STATUS_STR="${GREEN}RUNNING${NC} (IP: $MTP_IP | Port: $MTP_PORT)"
+else
+    STATUS_STR="${RED}NOT RUNNING${NC}"
+fi
+
+echo -e "${BLUE}--- СЕРВИС Статус: $STATUS_STR ---${NC}"
     echo -e "${BLUE}--- ПОЛЬЗОВАТЕЛИ -------------------------------------${NC}"
     echo -e "${YELLOW}1) ➕  Добавить пользователей (массово)${NC}"
     echo -e "${YELLOW}2) 📋  Список всех QR-кодов и ссылок${NC}"
