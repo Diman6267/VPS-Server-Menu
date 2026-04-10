@@ -41,10 +41,10 @@ function run_scanner {
     
     echo -e "\n${CYAN}>>> ЗАПУСК Realitls Scaner${NC}"
     echo -e "${YELLOW}Доступные параметры:${NC}"
-    echo "  1) -in (Файл со списком IP/CIDR)"
-    echo "  2) -addr (Один IP/CIDR или домен)"
-    echo "  3) -url (URL со списком доменов)"
-    echo -e "  X) [Отмена]${NC}"
+    echo "  1) 📄  -in (Файл со списком IP/CIDR)"
+    echo "  2) 🎯  -addr (Один IP/CIDR или домен)"
+    echo "  3) 🌐  -url (URL со списком доменов)"
+    echo -e "  X) ❌  [Отмена]${NC}"
     
     read -p "Выберите метод ввода [1-3, X]: " method
 
@@ -86,16 +86,16 @@ function run_tests_menu {
         echo -e "${CYAN}======================================================${NC}"
         echo -e "${CYAN}             🧪 МЕНЮ ТЕСТОВ СЕРВЕРА 🧪                ${NC}"
         echo -e "${CYAN}======================================================${NC}"
-        echo -e "${YELLOW}1) IP region${NC}"
-		echo -e "${YELLOW}2) Censorcheck для проверки геоблока${NC}"
-        echo -e "${YELLOW}3) Censorcheck для серверов РФ${NC}"
-        echo -e "${YELLOW}4) Тест до российских iPerf3 серверов${NC}"
-        echo -e "${YELLOW}5) YABS Benchmark${NC}"
-		echo -e "${YELLOW}6) IPQuality. Проверка IP сервера на блокировки зарубежными сервисами${NC}"
-		echo -e "${YELLOW}7) Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
-		echo -e "${YELLOW}8) Тест на процессор${NC}"
-        echo -e "${YELLOW}9) Запуск Realitls Scaner${NC}"
-        echo -e "${RED}X) Назад в главное меню${NC}"
+        echo -e "${YELLOW}1) 🌍  IP region${NC}"
+        echo -e "${YELLOW}2) 🚧  Censorcheck для проверки геоблока${NC}"
+        echo -e "${YELLOW}3) 🇷🇺  Censorcheck для серверов РФ${NC}"
+        echo -e "${YELLOW}4) 🚀  Тест до российских iPerf3 серверов${NC}"
+        echo -e "${YELLOW}5) 📊  YABS Benchmark${NC}"
+        echo -e "${YELLOW}6) 🛡️  IPQuality. Проверка IP сервера на блокировки зарубежными сервисами${NC}"
+        echo -e "${YELLOW}7) 📡  Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
+        echo -e "${YELLOW}8) 💻  Тест на процессор${NC}"
+        echo -e "${YELLOW}9) 🔍  Запуск Realitls Scaner${NC}"
+        echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
         read -p "Ваш выбор [1-5, X]: " choice
