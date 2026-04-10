@@ -133,11 +133,11 @@ function set_timezone_menu {
         echo -e "${CYAN}--- 🕒 НАСТРОЙКА ЧАСОВОГО ПОЯСА -------------------------${NC}"
         echo -e "    Текущий пояс: ${GREEN}$(get_timezone_status)${NC}"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
-        echo -e "1) Калининград (MSK-1)   5) Екатеринбург (MSK+2)"
-        echo -e "2) Москва (MSK)          6) Новосибирск (MSK+4)"
-        echo -e "3) Самара (MSK+1)        7) Владивосток (MSK+7)"
-        echo -e "4) UTC                   8) Магадан (MSK+8)"
-        echo -e "X) Назад"
+        echo -e "1) 🏰  Калининград (MSK-1)   5) 🏔️  Екатеринбург (MSK+2)"
+        echo -e "2) 🏛️  Москва (MSK)          6) 🌲  Новосибирск (MSK+4)"
+        echo -e "3) 🚀  Самара (MSK+1)        7) ⚓  Владивосток (MSK+7)"
+        echo -e "4) 🌍  UTC                   8) ❄️  Магадан (MSK+8)"
+        echo -e "X) 🔙  Назад"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
         read -p "Выбор [1-8, X]: " t_choice
         case $t_choice in
@@ -280,7 +280,7 @@ function run_setup_menu {
         echo -e "    Timezone:  [${YELLOW}$(get_timezone_status)${NC}]"
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
-        echo -e "${CYAN}1) 📈  Управление BBR (Оптимизация сети)${NC}"
+       echo -e "${CYAN}1) 📈  Управление BBR (Оптимизация сети)${NC}"
         echo -e "${CYAN}2) 🏓  Управление PING (Запрет ICMP)${NC}"
         echo -e "${CYAN}3) 🛡️  Управление Файрволом (UFW)${NC}"
         echo -e "${CYAN}4) 🕒  Настройка Timezone (Часовой пояс)${NC}"
