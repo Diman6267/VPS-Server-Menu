@@ -83,7 +83,7 @@ fi
     # NETWORK & GEO 
     IPV4=$(curl -s4 ipinfo.io/ip 2>/dev/null || echo -e "${RED}✗ Offline${NC}")
     IPV6=$(get_public_ipv6)
-    GEO_DATA=$(curl -s "http://ip-api.com/json/$PUBLIC_IPV4?lang=ru&fields=status,message,country,regionName,city,isp,org,as")
+    GEO_DATA=$(curl -s "http://ip-api.com/json/$IPV4?lang=ru&fields=status,message,country,regionName,city,isp,org,as")
     COUNTRY=$(echo "$GEO_DATA" | jq -r '.country' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"country":"\K[^"]+')
     LOC=$(echo "$GEO_DATA" | jq -r '.city' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"city":"\K[^"]+')
     REG=$(echo "$GEO_DATA" | jq -r '.regionName' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"regionName":"\K[^"]+')
