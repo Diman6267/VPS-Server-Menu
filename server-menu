@@ -133,9 +133,9 @@ fi
         status_mtp="${RED}Остановлен${NC}"
     fi
 
-    echo -e "    X-UI:        [$status_xui]"
-    echo -e "    Hysteria2:   [$status_hy2]"
-    echo -e "    MTProxy:     [$status_mtp]"
+    echo -e "    🎛️   X-UI:        [$status_xui]"
+    echo -e "    🎭  Hysteria2:   [$status_hy2]"
+    echo -e "    ✈️   MTProxy:     [$status_mtp]"
     
     echo -e "${BLUE}--- ДЕЙСТВИЯ ---------------------------------------${NC}"
     echo -e "${YELLOW}1) 🎛️   Управление X-UI (Установка/Запуск/Настройка)${NC}"
