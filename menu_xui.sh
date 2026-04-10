@@ -10,7 +10,7 @@ function manage_xui_service {
     while true; do
         clear
         echo -e "${CYAN}======================================================${NC}"
-        echo -e "${CYAN}          🛠️  УПРАВЛЕНИЕ X-UI ПАНЕЛЬЮ 🛠️              ${NC}"
+        echo -e "${CYAN}          🎛️  УПРАВЛЕНИЕ X-UI ПАНЕЛЬЮ 🎛️              ${NC}"
         echo -e "${CYAN}======================================================${NC}"
         
         STATUS_XUI=$(get_service_status $SERVICE_NAME)
