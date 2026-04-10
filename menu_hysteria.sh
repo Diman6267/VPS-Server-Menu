@@ -296,10 +296,10 @@ function manage_hysteria_users {
         done
         echo -e "${BLUE}--------------------------------------------------${NC}"
 
-        echo -e "${YELLOW}    1) Добавить нового пользователя${NC}"
-        echo -e "${RED}    2) Удалить пользователя${NC}"
-        echo -e "${GREEN}    3) Создать ссылку Hysteria (URI) ${NC}"
-        echo -e "${RED}    X) Назад в меню Hysteria${NC}"
+        echo -e "${YELLOW}    1) ➕  Добавить нового пользователя${NC}"
+        echo -e "${RED}    2) ❌  Удалить пользователя${NC}"
+        echo -e "${GREEN}    3) 🔗  Создать ссылку Hysteria (URI) ${NC}"
+        echo -e "${RED}    X) 🔙  Назад в меню Hysteria${NC}"
         echo -e "${BLUE}--------------------------------------------------${NC}"
         
         read -p "Ваш выбор [1-3, X]: " choice
@@ -377,11 +377,11 @@ function manage_hysteria_service {
         echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
-        echo -e "${GREEN}1) Установить Hysteria 2${NC}"
-        echo -e "${YELLOW}2) Статус / Запустить / Остановить / Перезапустить сервис${NC}"
-        echo -e "${CYAN}3) Управление пользователями${NC}"
-        echo -e "${RED}4) Удалить Hysteria 2${NC}"
-        echo -e "${RED}X) Назад в главное меню${NC}"
+        echo -e "${GREEN}1) 📥  Установить Hysteria 2${NC}"
+        echo -e "${YELLOW}2) 🚥  Статус / Запустить / Остановить / Перезапустить сервис${NC}"
+        echo -e "${CYAN}3) 👥  Управление пользователями${NC}"
+        echo -e "${RED}4) 🗑️  Удалить Hysteria 2${NC}"
+        echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
     
         read -p "Ваш выбор [1-4, X]: " choice
