@@ -134,7 +134,7 @@ function set_timezone_menu {
         echo -e "    Текущий пояс: ${GREEN}$(get_timezone_status)${NC}"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
         echo -e "1) 🏰  Калининград (MSK-1)   5) 🏔️  Екатеринбург (MSK+2)"
-        echo -e "2) 🏛️   Москва (MSK)           6) 🌲 Новосибирск (MSK+4)"
+        echo -e "2) 🏛️   Москва (MSK)          6) 🌲 Новосибирск (MSK+4)"
         echo -e "3) 🚀  Самара (MSK+1)        7) ⚓ Владивосток (MSK+7)"
         echo -e "4) 🌍  UTC                   8) ❄️  Магадан (MSK+8)"
         echo -e "X) 🔙  Назад"
