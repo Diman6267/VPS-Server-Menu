@@ -368,7 +368,7 @@ function manage_hysteria_service {
     while true; do
         clear
         echo -e "${CYAN}======================================================${NC}"
-        echo -e "${CYAN}        👻 УПРАВЛЕНИЕ СЕРВИСОМ HYSTERIA 2 👻            ${NC}"
+        echo -e "${CYAN}        🎭 УПРАВЛЕНИЕ СЕРВИСОМ HYSTERIA 2 🎭            ${NC}"
         echo -e "${CYAN}======================================================${NC}"
         
         STATUS_HYS=$(get_service_status $HYSTERIA_SERVICE)
