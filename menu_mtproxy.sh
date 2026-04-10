@@ -71,7 +71,7 @@ function show_user_info {
 function draw_header {
     clear
     echo -e "${CYAN}======================================================${NC}"
-    echo -e "${CYAN}             🛡️  УПРАВЛЕНИЕ MTPROTO PROXY 🛡️            ${NC}"
+    echo -e "${CYAN}             ✈️  УПРАВЛЕНИЕ MTPROTO PROXY ✈️            ${NC}"
     echo -e "${CYAN}======================================================${NC}"
 }
 
