@@ -274,10 +274,10 @@ function run_setup_menu {
         PING_STATUS=$(get_ping_status)
         
         echo -e "${BLUE}--- ТЕКУЩИЕ СТАТУСЫ ----------------------------------${NC}"
-        echo -e "    BBR:       [$(if [ "$BBR_STATUS" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
-        echo -e "    PING:      [$(if [ "$PING_STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
-        echo -e "    UFW:       [$(if [ "$(get_ufw_status)" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
-        echo -e "    Timezone:  [${YELLOW}$(get_timezone_status)${NC}]"
+        echo -e "📈  BBR:       [$(if [ "$BBR_STATUS" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
+        echo -e "🏓  PING:      [$(if [ "$PING_STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
+        echo -e "🛡️   UFW:       [$(if [ "$(get_ufw_status)" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
+        echo -e "🕒  Timezone:  [${YELLOW}$(get_timezone_status)${NC}]"
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
        echo -e "${CYAN}1) 📈  Управление BBR (Оптимизация сети)${NC}"
