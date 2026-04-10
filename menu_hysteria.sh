@@ -377,11 +377,11 @@ function manage_hysteria_service {
         echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
-        echo -e "${GREEN}1)  📥    Установить Hysteria 2${NC}"
-        echo -e "${YELLOW}2)  🚥    Статус / Запустить / Остановить / Перезапустить сервис${NC}"
-        echo -e "${CYAN}3)  👥    Управление пользователями${NC}"
-        echo -e "${RED}4)  🗑️    Удалить Hysteria 2${NC}"
-        echo -e "${RED}X)  🔙    Назад в главное меню${NC}"
+        echo -e "${GREEN}1) 📥   Установить Hysteria 2${NC}"
+        echo -e "${YELLOW}2) 🚥   Статус / Запустить / Остановить / Перезапустить сервис${NC}"
+        echo -e "${CYAN}3) 👥   Управление пользователями${NC}"
+        echo -e "${RED}4) 🗑️    Удалить Hysteria 2${NC}"
+        echo -e "${RED}X) 🔙   Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
     
         read -p "Ваш выбор [1-4, X]: " choice
