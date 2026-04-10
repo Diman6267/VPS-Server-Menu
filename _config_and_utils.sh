@@ -42,11 +42,11 @@ function manage_service_status_restart {
     SERVICE_NAME=$1
     
     echo -e "\n${CYAN}>>> Действия для службы $SERVICE_NAME${NC}"
-    echo -e "  1) Статус ${GREEN}(status)${NC}"
-    echo -e "  2) Запустить ${GREEN}(start)${NC}"
-    echo -e "  3) Остановить ${RED}(stop)${NC}"
-    echo -e "  4) Перезапустить ${YELLOW}(restart)${NC}"
-    echo -e "  X) Назад"
+    echo -e "  1) ℹ️  Статус ${GREEN}(status)${NC}"
+    echo -e "  2) ▶️  Запустить ${GREEN}(start)${NC}"
+    echo -e "  3) ⏹️  Остановить ${RED}(stop)${NC}"
+    echo -e "  4) 🔄  Перезапустить ${YELLOW}(restart)${NC}"
+    echo -e "  X) 🔙  Назад"
     
     read -p "Ваш выбор [1-4, X]: " action
     
