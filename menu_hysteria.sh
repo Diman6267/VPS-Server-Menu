@@ -372,9 +372,29 @@ function manage_hysteria_service {
         echo -e "${CYAN}======================================================${NC}"
         
         STATUS_HYS=$(get_service_status $HYSTERIA_SERVICE)
-        
-        STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
+        # Получаем данные для отображения
+        if [ "$STATUS_HYS" == "active" ]; then
+            STATUS_DISPLAY="${GREEN}РАБОТАЕТ${NC}"
+            DISPLAY_DOMAIN=$(get_hy2_domain 2>/dev/null)
+            DISPLAY_PORT=$(get_hy2_port 2>/dev/null)
+            COLOR_VAL="${GREEN}"
+        else
+            STATUS_DISPLAY="${RED}ОСТАНОВЛЕН${NC}"
+            DISPLAY_DOMAIN="---"
+            DISPLAY_PORT="---"
+            COLOR_VAL="${RED}"
+            # Если сервис остановлен, но конфиг есть, попробуем вытащить данные
+            if [ -f "$HYSTERIA_CONFIG" ]; then
+                DISPLAY_DOMAIN=$(get_hy2_domain 2>/dev/null)
+                DISPLAY_PORT=$(get_hy2_port 2>/dev/null)
+                COLOR_VAL="${YELLOW}" # Желтый цвет, если настроено, но выключено
+            fi
+        fi
+
+        echo -e "${BLUE}--- СЕРВИС (Адрес: ${COLOR_VAL}${DISPLAY_DOMAIN}${BLUE} | Port: ${COLOR_VAL}${DISPLAY_PORT}${BLUE}) ---${NC}"
         echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
+        STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
+		
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
         echo -e "${GREEN}1) 📥  Установить Hysteria 2${NC}"
