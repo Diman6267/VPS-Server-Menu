@@ -188,7 +188,7 @@ EOF
                 sudo docker rmi telegrammessenger/proxy:latest
                 sudo rm -rf /etc/server-menu/mtproxy.conf /etc/server-menu/mtproxy_users.list
                 sudo rm -f $USER_DB $CONFIG_FILE
-                echo -e "${RED}Всё удалено.${NC}"; echo -e "${CYAN}Нажмите Enter, чтобы продолжить...${NC}"
+                echo -e "${RED}MTProxy удален, но сам Docker оставлен в системе.${NC}"; echo -e "${CYAN}Нажмите Enter, чтобы продолжить...${NC}"
     read -r
             fi
             ;;
