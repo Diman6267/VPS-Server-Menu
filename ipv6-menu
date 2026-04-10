@@ -79,7 +79,7 @@ function ipv6_autostart_config {
 function show_menu {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "${CYAN}           ⚙️  МЕНЮ УПРАВЛЕНИЯ IPv6 ⚙️            ${NC}"
+    echo -e "${CYAN}           🌐  МЕНЮ УПРАВЛЕНИЯ IPv6 🌐            ${NC}"
     echo -e "${CYAN}==================================================${NC}"
     
     ipv6_status
