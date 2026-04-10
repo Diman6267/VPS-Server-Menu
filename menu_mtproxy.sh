@@ -79,18 +79,22 @@ function draw_header {
 while true; do
     load_config
     draw_header
-    if sudo docker ps --format '{{.Names}}' | grep -q "mtproto-proxy"; then
-    STATUS_STR="${GREEN}RUNNING${NC} (IP: $MTP_IP | Port: $MTP_PORT)"
-else
-    STATUS_STR="${RED}NOT RUNNING${NC}"
-fi
+    if command -v docker >/dev/null 2>&1 && sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "mtproto-proxy"; then
+        DISPLAY_IP="$MTP_IP"
+        DISPLAY_PORT="$MTP_PORT"
+        COLOR_VAL="${GREEN}"
+    else
+        DISPLAY_IP="---"
+        DISPLAY_PORT="---"
+        COLOR_VAL="${RED}"
+    fi
 
 echo -e "${BLUE}--- СЕРВИС Статус: $STATUS_STR ---${NC}"
     echo -e "${BLUE}--- ПОЛЬЗОВАТЕЛИ -------------------------------------${NC}"
     echo -e "${YELLOW}1) ➕  Добавить пользователей (массово)${NC}"
     echo -e "${YELLOW}2) 📋  Список всех QR-кодов и ссылок${NC}"
     echo -e "${RED}3) ❌  Удалить пользователей (выбор нескольких)${NC}"
-    echo -e "${BLUE}--- СЕРВИС (IP: $MTP_IP | Port: $MTP_PORT) ---${NC}"
+    echo -e "${BLUE}--- СЕРВИС (IP: ${COLOR_VAL}${DISPLAY_IP}${BLUE} | Port: ${COLOR_VAL}${DISPLAY_PORT}${BLUE}) ---${NC}"
     echo -e "${GREEN}4) 🚀  Установка / Смена настроек (IP/Порт/Тег)${NC}"
     echo -e "${RED}5) 🗑️   Полное удаление прокси${NC}"
     echo -e "${CYAN}X) 🔙  Назад в главное меню${NC}"
