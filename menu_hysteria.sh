@@ -391,7 +391,7 @@ function manage_hysteria_service {
             fi
         fi
 
-        echo -e "${BLUE}--- СЕРВИС (Адрес: ${COLOR_VAL}${DISPLAY_DOMAIN}${BLUE} | Port: ${COLOR_VAL}${DISPLAY_PORT}${BLUE}) ---${NC}"
+        echo -e "${CYAN}Адрес: ${COLOR_VAL}${DISPLAY_DOMAIN}${BLUE} | Port: ${COLOR_VAL}${DISPLAY_PORT}${BLUE}${NC}"
         echo -e "${BLUE}Текущий статус: [${STATUS_DISPLAY}]${NC}"
         STATUS_DISPLAY=$(if [ "$STATUS_HYS" == "active" ]; then echo -e "${GREEN}РАБОТАЕТ${NC}"; else echo -e "${RED}ОСТАНОВЛЕН${NC}"; fi)
 		
@@ -415,7 +415,6 @@ function manage_hysteria_service {
             [Xx]) return ;;
             *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
         esac
-        read -p "Нажмите Enter для продолжения..."
     done
 }
 manage_hysteria_service
