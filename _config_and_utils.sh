@@ -46,6 +46,7 @@ function manage_service_status_restart {
     echo -e "  2) ▶️   Запустить ${GREEN}(start)${NC}"
     echo -e "  3) ⏹️   Остановить ${RED}(stop)${NC}"
     echo -e "  4) 🔄  Перезапустить ${YELLOW}(restart)${NC}"
+    echo -e "  5) 📄  Посмотреть логи ${CYAN}(logs)${NC}"
     echo -e "  X) 🔙  Назад"
     
     read -p "Ваш выбор [1-4, X]: " action
@@ -55,6 +56,12 @@ function manage_service_status_restart {
         2) sudo systemctl start $SERVICE_NAME && echo -e "${GREEN}Запущено!${NC}" ;;
         3) sudo systemctl stop $SERVICE_NAME && echo -e "${RED}Остановлено!${NC}" ;;
         4) sudo systemctl restart $SERVICE_NAME && echo -e "${YELLOW}Перезапущено!${NC}" ;;
+        5) 
+            echo -e "${YELLOW}ℹ️  Открываю журнал (последние 100 строк).${NC}"
+            echo -e "${GREEN}ℹ️  Для ВЫХОДА обратно в меню нажмите клавишу 'q'.${NC}"
+            sleep 2
+            sudo journalctl -u $SERVICE_NAME -n 100 -e
+            ;;
         [Xx]) return ;;
         *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
     esac
