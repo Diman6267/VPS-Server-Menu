@@ -79,7 +79,74 @@ function run_scanner {
     $SCANER_PATH $PARAMS
     echo -e "\n${GREEN}Scaner завершил работу.${NC}"
 }
+# ----------------------------------------------------------------------
+# DPI DETECTOR & SNI SCAN
+# ----------------------------------------------------------------------
 
+function run_dpi_detector {
+    echo -e "\n${CYAN}>>> Подготовка DPI Detector (через Docker)...${NC}"
+    
+    # 1. Проверяем, установлен ли Docker. Если нет — ставим штатным способом
+    if ! command -v docker &> /dev/null; then
+        echo -e "${YELLOW}Docker не найден. Начинаю установку...${NC}"
+        sudo apt-get update && sudo apt-get install -y docker.io
+        sudo systemctl enable --now docker
+        echo -e "${GREEN}Docker успешно установлен!${NC}"
+    fi
+
+    # 2. Запуск контейнера
+    echo -e "${GREEN}✅ Запуск DPI Detector...${NC}"
+    echo -e "${YELLOW}(Образ обновится автоматически. Для выхода нажмите Ctrl+C)${NC}"
+    sleep 1
+    
+    # --rm удаляет контейнер после закрытия (не копит мусор)
+    # -it запускает в интерактивном режиме с нормальным отображением меню
+    # --pull=always всегда проверяет и качает свежую версию перед запуском
+    sudo docker run --rm -it --pull=always ghcr.io/runnin4ik/dpi-detector:latest
+    
+    echo -e "\n${BLUE}------------------------------------------------------${NC}"
+    read -p "Нажмите Enter для возврата в меню..."
+}
+
+function run_sni_scan {
+    echo -e "\n${CYAN}>>> Подготовка SNI Scan...${NC}"
+    
+    # 1. Проверка Python3
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${YELLOW}Установка Python3...${NC}"
+        sudo apt-get update && sudo apt-get install -y python3 git
+    fi
+
+    local DIR="/root/sni-scan"
+    
+    # 2. Клонирование или обновление
+    if [ ! -d "$DIR" ]; then
+        echo -e "${YELLOW}Клонирование репозитория...${NC}"
+        git clone https://github.com/dewil/sni-scan.git "$DIR"
+    else
+        echo -e "${YELLOW}Обновление файлов...${NC}"
+        cd "$DIR" && git pull -q
+    fi
+
+    cd "$DIR" || return
+
+    # 3. Запрос параметров у пользователя
+    echo -e "${BLUE}------------------------------------------------------${NC}"
+    read -p "Укажите маску подсети для скана [по умолчанию 24]: " subnet_mask
+    subnet_mask=${subnet_mask:-24}
+
+    # 4. Запуск
+    echo -e "${GREEN}✅ Запуск сканирования сети (/$subnet_mask)...${NC}"
+    echo -e "${YELLOW}(Отчет будет сохранен в $DIR/report.md)${NC}"
+    echo -e "${YELLOW}(Для прерывания нажмите Ctrl+C)${NC}"
+    sleep 1
+    
+    python3 sni-scan.py -m "$subnet_mask" -o report.md
+    
+    echo -e "\n${GREEN}✅ Готово! Результаты можно посмотреть в $DIR/report.md${NC}"
+    echo -e "${BLUE}------------------------------------------------------${NC}"
+    read -p "Нажмите Enter для возврата в меню..."
+}
 function run_tests_menu {
     while true; do
         clear
@@ -95,10 +162,12 @@ function run_tests_menu {
         echo -e "${YELLOW}7) 📡  Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
         echo -e "${YELLOW}8) 💻  Тест на процессор${NC}"
         echo -e "${YELLOW}9) 🔍  Запуск Realitls Scaner${NC}"
+		echo -e "${YELLOW}10)🕵️‍♂️  Запустить DPI Detector (Анализ цензуры)${NC}"
+        echo -e "${YELLOW}11)🔍  Запустить SNI Scan (Скан подсети)${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
-        read -p "Ваш выбор [1-5, X]: " choice
+        read -p "Ваш выбор [1-11, X]: " choice
         echo ""
 
         case $choice in
@@ -151,6 +220,12 @@ fi
 				sysbench cpu run --threads=1
                 ;;	
             9) run_scanner ;;
+			10)
+                run_dpi_detector
+                ;;
+            11)
+                run_sni_scan
+                ;;
             [Xx]) return ;;
             *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
         esac
