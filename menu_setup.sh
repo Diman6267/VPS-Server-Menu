@@ -258,7 +258,129 @@ function show_ping_menu {
     fi
     sleep 2
 }
+# ----------------------------------------------------------------------
+# SSL: УПРАВЛЕНИЕ СЕРТИФИКАТАМИ
+# ----------------------------------------------------------------------
 
+# Глобальная переменная директории для сертификатов
+SSL_SAVE_DIR="/root/cert"
+
+function manage_ssl_menu {
+    # Проверяем и ставим certbot, если его нет
+    if ! command -v certbot &> /dev/null; then
+        echo -e "${YELLOW}Установка Certbot для работы с сертификатами...${NC}"
+        sudo apt update && sudo apt install -y certbot
+    fi
+
+    # Создаем папку, если ее нет
+    mkdir -p "$SSL_SAVE_DIR"
+
+    while true; do
+        clear
+        echo -e "${CYAN}--- 🔐 УПРАВЛЕНИЕ СЕРТИФИКАТАМИ (SSL/ACME) ----------------${NC}"
+        echo -e "    Папка сохранения: ${GREEN}$SSL_SAVE_DIR${NC}"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "1) ➕  Получить сертификат (Один домен или Multi-domain SAN)"
+        echo -e "2) 📋  Список сохраненных сертификатов"
+        echo -e "3) ❌  Отозвать и удалить сертификат"
+        echo -e "4) ⚙️   Изменить папку по умолчанию"
+        echo -e "X) 🔙  Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Выбор: " ssl_choice
+
+        case $ssl_choice in
+            1)
+                read -p "Сколько доменов включить в сертификат? (по умолчанию 1): " d_count
+                [[ ! "$d_count" =~ ^[0-9]+$ ]] && d_count=1
+                
+                DOMAINS_ARGS=""
+                FIRST_DOMAIN=""
+                for (( i=1; i<=d_count; i++ )); do
+                    read -p "Введите домен #$i (например, example.com): " dom
+                    if [ -n "$dom" ]; then
+                        DOMAINS_ARGS="$DOMAINS_ARGS -d $dom"
+                        [ -z "$FIRST_DOMAIN" ] && FIRST_DOMAIN="$dom"
+                    fi
+                done
+                
+                if [ -z "$FIRST_DOMAIN" ]; then
+                    echo -e "${RED}Домены не введены. Отмена.${NC}"; sleep 1; continue
+                fi
+
+                # Автоматически освобождаем 80 порт перед запросом
+                if ss -tlpn | grep -q ":80 "; then
+                    echo -e "${YELLOW}Порт 80 занят! Временно останавливаем службы (nginx/apache/hysteria)...${NC}"
+                    sudo systemctl stop nginx apache2 hysteria-server 2>/dev/null
+                fi
+
+                echo -e "${CYAN}Запрашиваем сертификат...${NC}"
+                # Запрашиваем email для уведомлений
+                echo -e "${YELLOW}Email нужен Let's Encrypt только для уведомлений об истечении сертификата.${NC}"
+                read -p "Введите email (или нажмите Enter, чтобы выпустить без почты): " acme_email
+
+                if [ -z "$acme_email" ]; then
+                    EMAIL_ARG="--register-unsafely-without-email"
+                else
+                    EMAIL_ARG="-m $acme_email"
+                fi
+
+                echo -e "${CYAN}Запрашиваем сертификат...${NC}"
+                # Запрашиваем через standalone сервер
+                sudo certbot certonly --standalone $DOMAINS_ARGS --non-interactive --agree-tos $EMAIL_ARG
+                
+                if [ $? -eq 0 ]; then
+                    # Копируем ключи в пользовательскую папку
+                    mkdir -p "$SSL_SAVE_DIR/$FIRST_DOMAIN"
+                    cp /etc/letsencrypt/live/$FIRST_DOMAIN/fullchain.pem "$SSL_SAVE_DIR/$FIRST_DOMAIN/fullchain.pem"
+                    cp /etc/letsencrypt/live/$FIRST_DOMAIN/privkey.pem "$SSL_SAVE_DIR/$FIRST_DOMAIN/privkey.pem"
+                    
+                    echo -e "\n${GREEN}✅ Сертификаты успешно выпущены и скопированы!${NC}"
+                    echo -e "${YELLOW}Путь к Fullchain (Сертификат): ${NC}$SSL_SAVE_DIR/$FIRST_DOMAIN/fullchain.pem"
+                    echo -e "${YELLOW}Путь к Privkey (Ключ):       ${NC}$SSL_SAVE_DIR/$FIRST_DOMAIN/privkey.pem"
+                else
+                    echo -e "\n${RED}❌ Ошибка при выпуске сертификата.${NC}"
+                    echo -e "Убедитесь, что IP домена настроен правильно, а порты 80 и 443 открыты в UFW."
+                fi
+                read -p "Нажмите Enter..." ;;
+            
+            2)
+                echo -e "${GREEN}Сертификаты в базе системы (Certbot):${NC}"
+                sudo certbot certificates 2>/dev/null | grep -E 'Certificate Name|Domains|Expiry Date' || echo "Нет активных."
+                
+                echo -e "\n${GREEN}Сертификаты в вашей папке ($SSL_SAVE_DIR):${NC}"
+                ls -lh "$SSL_SAVE_DIR" 2>/dev/null || echo "Папка пуста."
+                read -p "Нажмите Enter..." ;;
+
+            3)
+                echo -e "${GREEN}Доступные сертификаты для удаления:${NC}"
+                sudo certbot certificates 2>/dev/null | grep "Certificate Name:"
+                
+                echo -e "${YELLOW}(Введите 0 или просто Enter для отмены)${NC}"
+                read -p "Введите имя сертификата (Certificate Name) для отзыва: " del_dom
+                
+                if [[ -z "$del_dom" || "$del_dom" == "0" ]]; then
+                    echo -e "${BLUE}Удаление отменено.${NC}"; sleep 1; continue
+                fi
+                
+                # Отзываем и удаляем
+                sudo certbot revoke --cert-name "$del_dom" --delete-after-revoke --reason unspecified
+                rm -rf "$SSL_SAVE_DIR/$del_dom"
+                
+                echo -e "${GREEN}✅ Сертификат $del_dom отозван и удален со всех папок.${NC}"
+                read -p "Нажмите Enter..." ;;
+
+            4)
+                read -p "Введите новый путь [текущий: $SSL_SAVE_DIR]: " new_dir
+                if [ -n "$new_dir" ]; then
+                    SSL_SAVE_DIR="$new_dir"
+                    mkdir -p "$SSL_SAVE_DIR"
+                    echo -e "${GREEN}✅ Путь успешно изменен.${NC}"
+                fi
+                ;;
+            [Xx]) return ;;
+        esac
+    done
+}
 # ----------------------------------------------------------------------
 # ГЛАВНЫЙ ЦИКЛ МЕНЮ УСТАНОВКИ (Оригинал + 2 пункта)
 # ----------------------------------------------------------------------
@@ -284,15 +406,17 @@ function run_setup_menu {
         echo -e "${CYAN}2) 🏓  Управление PING (Запрет ICMP)${NC}"
         echo -e "${CYAN}3) 🛡️   Управление Файрволом (UFW)${NC}"
         echo -e "${CYAN}4) 🕒  Настройка Timezone (Часовой пояс)${NC}"
+        echo -e "${CYAN}5) 🔐  Управление SSL сертификатами${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
-        read -p "Ваш выбор [1-4, X]: " choice
+        read -p "Ваш выбор [1-5, X]: " choice
         case $choice in
             1) show_bbr_menu ;;
             2) show_ping_menu ;;
             3) show_ufw_menu ;;
             4) set_timezone_menu ;;
+            5) manage_ssl_menu ;;
             [Xx]) return ;;
         esac
     done
