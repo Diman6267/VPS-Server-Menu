@@ -24,7 +24,7 @@ function ipv6_status {
         echo -e "   Адреса: ${YELLOW}Нет активных IPv6 адресов.${NC}"
     else
         echo -e "   Статус ядра (disable_ipv6): ${GREEN}0 (Включен)${NC}"
-        IP_OUTPUT=$(ip -6 a show | grep 'inet6' | awk '{print $2, $4, $7}')
+        IP_OUTPUT=$(ip -6 a show scope global 2>/dev/null | grep 'inet6' | grep -v -i "fe80" | grep -v -i "fd" | awk '{print $2, $4, $7}')
         if [[ -z "$IP_OUTPUT" ]]; then
             echo -e "   Адреса: ${RED}Нет активных IPv6 адресов.${NC}"
         else
