@@ -46,7 +46,7 @@ function manage_service_status_restart {
     echo -e "  2) ▶️   Запустить ${GREEN}(start)${NC}"
     echo -e "  3) ⏹️   Остановить ${RED}(stop)${NC}"
     echo -e "  4) 🔄  Перезапустить ${YELLOW}(restart)${NC}"
-    echo -e "  5) 📄  Посмотреть логи ${CYAN}(logs)${NC}"
+    echo -e "  5) 📄  Посмотреть логи в реальном времени ${CYAN}(logs)${NC}"
     echo -e "  X) 🔙  Назад"
     
     read -p "Ваш выбор [1-4, X]: " action
@@ -66,7 +66,9 @@ function manage_service_status_restart {
         *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
     esac
 }
-
+echo -e "${BLUE}------------------------------------------------------${NC}"
+    read -p "Нажмите Enter для возврата в меню..."
+}
 # 4. Получение кода статуса ядра IPv6
 function get_ipv6_status_code() {
     cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null
