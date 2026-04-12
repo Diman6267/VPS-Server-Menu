@@ -3,7 +3,8 @@
 # ======================================================================
 # ОБЩИЕ ПЕРЕМЕННЫЕ И ФУНКЦИИ ДЛЯ ВСЕХ СКРИПТОВ
 # ======================================================================
-
+# Перехват Ctrl+C (SIGINT) во всех скриптах, чтобы не выкидывало из меню
+trap 'echo -e "\n${YELLOW}⚠️ Действие прервано. Возврат в меню...${NC}"; sleep 1' SIGINT
 # Цвета ANSI
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -85,16 +86,22 @@ function get_public_ipv6 {
     local status_code=$(get_ipv6_status_code)
     
     if [ "$status_code" -eq 1 ]; then
-        echo "${RED}Отключен${NC}"
+        echo -e "${RED}Отключен${NC}"
         return
     fi
     
-    IP_ADDR=$(ip -6 a show scope global | grep "inet6" | awk '{print $2}' | cut -d '/' -f 1 | head -n 1)
+    # Способ 1: Получаем реальный внешний IP через API (самый надежный)
+    IP_ADDR=$(curl -s -6 --max-time 2 ifconfig.me || curl -s -6 --max-time 2 api6.ipify.org)
+    
+    # Способ 2: Если API недоступен, парсим систему (игнорируем локальные fe80 и fd)
+    if [[ -z "$IP_ADDR" ]]; then
+        IP_ADDR=$(ip -6 addr show scope global 2>/dev/null | awk '/inet6/ {print $2}' | cut -d '/' -f 1 | grep -v -i "^fe80" | grep -v -i "^fd" | head -n 1)
+    fi
     
     if [[ -z "$IP_ADDR" ]]; then
-        echo "${YELLOW}Включен, адрес не назначен${NC}"
+        echo -e "${YELLOW}Включен, адрес не назначен${NC}"
     else
-        echo "${GREEN}$IP_ADDR${NC}"
+        echo -e "${GREEN}$IP_ADDR${NC}"
     fi
 }
 # ----------------------------------------------------------------------
