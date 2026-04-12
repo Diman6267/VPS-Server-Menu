@@ -167,7 +167,7 @@ while true; do
            echo -e "${YELLOW}>>> Принудительное обновление через Git...${NC}"
            cd /root/VPS-Server-Menu || exit
            git fetch origin main &>/dev/null
-           if git reset --hard origin/main; then
+           if git reset --hard origin/main > /dev/null; then 
                chmod +x /root/VPS-Server-Menu/*
                echo -e "${GREEN}✅ Обновлено! Перезапуск...${NC}"
                sleep 1
