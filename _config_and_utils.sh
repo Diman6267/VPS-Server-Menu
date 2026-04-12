@@ -49,24 +49,27 @@ function manage_service_status_restart {
     echo -e "  5) 📄  Посмотреть логи в реальном времени ${CYAN}(logs)${NC}"
     echo -e "  X) 🔙  Назад"
     
-    read -p "Ваш выбор [1-4, X]: " action
+    read -p "Ваш выбор [1-5, X]: " action
     
     case $action in
-        1) sudo systemctl status $SERVICE_NAME --no-pager ;;
-        2) sudo systemctl start $SERVICE_NAME && echo -e "${GREEN}Запущено!${NC}" ;;
-        3) sudo systemctl stop $SERVICE_NAME && echo -e "${RED}Остановлено!${NC}" ;;
-        4) sudo systemctl restart $SERVICE_NAME && echo -e "${YELLOW}Перезапущено!${NC}" ;;
+        1) 
+            echo -e "${BLUE}------------------------------------------------------${NC}"
+            sudo systemctl status $SERVICE_NAME --no-pager 
+            ;;
+        2) sudo systemctl start $SERVICE_NAME && echo -e "${GREEN}✅ Запущено!${NC}" ;;
+        3) sudo systemctl stop $SERVICE_NAME && echo -e "${RED}🛑 Остановлено!${NC}" ;;
+        4) sudo systemctl restart $SERVICE_NAME && echo -e "${YELLOW}🔄 Перезапущено!${NC}" ;;
         5) 
-            echo -e "${YELLOW}ℹ️  Открываю журнал (последние 100 строк).${NC}"
-            echo -e "${GREEN}ℹ️  Для ВЫХОДА обратно в меню нажмите клавишу 'q'.${NC}"
+            echo -e "${YELLOW}ℹ️  Открываю журнал (последние 50 строк + новые события).${NC}"
+            echo -e "${GREEN}ℹ️  Для ВЫХОДА обратно в меню нажмите Ctrl+C.${NC}"
             sleep 2
-            sudo journalctl -u $SERVICE_NAME -n 100 -e
+            sudo journalctl -u $SERVICE_NAME -n 50 -f
             ;;
         [Xx]) return ;;
         *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
     esac
-}
-echo -e "${BLUE}------------------------------------------------------${NC}"
+    
+    echo -e "${BLUE}------------------------------------------------------${NC}"
     read -p "Нажмите Enter для возврата в меню..."
 }
 # 4. Получение кода статуса ядра IPv6
