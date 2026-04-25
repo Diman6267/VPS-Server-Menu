@@ -407,16 +407,20 @@ function run_setup_menu {
         echo -e "${CYAN}3) 🛡️   Управление Файрволом (UFW)${NC}"
         echo -e "${CYAN}4) 🕒  Настройка Timezone (Часовой пояс)${NC}"
         echo -e "${CYAN}5) 🔐  Управление SSL сертификатами${NC}"
+        echo -e "${YELLOW}6) ☁️   Управление Cloudflare WARP${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
-        read -p "Ваш выбор [1-5, X]: " choice
+        read -p "Ваш выбор [1-6, X]: " choice
         case $choice in
             1) show_bbr_menu ;;
             2) show_ping_menu ;;
             3) show_ufw_menu ;;
             4) set_timezone_menu ;;
             5) manage_ssl_menu ;;
+            6)
+            bash /root/VPS-Server-Menu/menu_warp.sh
+            ;;
             [Xx]) return ;;
         esac
     done
