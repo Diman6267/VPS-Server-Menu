@@ -41,6 +41,7 @@ ln -sf "$TARGET_DIR/menu_hysteria.sh" /usr/local/bin/menu_hysteria.sh
 ln -sf "$TARGET_DIR/menu_mtproxy.sh" /usr/local/bin/menu_mtproxy.sh
 ln -sf "$TARGET_DIR/menu_tests.sh" /usr/local/bin/menu_tests.sh
 ln -sf "$TARGET_DIR/menu_setup.sh" /usr/local/bin/menu_setup.sh
+ln -sf "$TARGET_DIR/menu_warp.sh" /usr/local/bin/menu_warp.sh
 ln -sf "$TARGET_DIR/ipv6-menu" /usr/local/bin/ipv6-menu
     chmod +x "$TARGET_DIR/ipv6-menu"
 # 6. Настройка конфигурационного файла (Исправлено дублирование)
