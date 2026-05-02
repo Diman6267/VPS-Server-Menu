@@ -27,7 +27,7 @@ function check_for_updates {
         echo -e "${CYAN}Что нового:${NC}"
         git log HEAD..origin/main --pretty=format:"- %s%n  %b"
         echo -e "${YELLOW}------------------------------------------------------"
-        echo -e "Нажмите ${GREEN}[7]${NC} в меню для автообновления."
+        echo -e "Нажмите ${GREEN}[8]${NC} в меню для автообновления."
         echo -e "======================================================${NC}"
         echo ""
         # ВАЖНО: Пауза, чтобы уведомление не стерлось командой clear
@@ -62,7 +62,7 @@ fi
     VM_X=$(grep -Eow "vmx|svm" /proc/cpuinfo > /dev/null && echo -e "${GREEN}✓ Включено${NC}" || echo -e "${RED}✗ Выключено${NC}")
     VIRT=$(systemd-detect-virt 2>/dev/null || echo "Unknown")
 
-    # DISK & MEM (Используем твои существующие расчеты с bc) [cite: 8]
+    # DISK & MEM
     RAM_TOTAL_RAW=$(grep MemTotal /proc/meminfo | awk '{print $2/1024/1024}')
     RAM_TOTAL=$(printf "%.1f" $RAM_TOTAL_RAW)
     MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2/1024/1024}')
@@ -144,7 +144,8 @@ fi
     echo -e "${GREEN}4) 🧪  Тестирование сервера (Скорость/Блокировки/Сканер)${NC}"
     echo -e "${GREEN}5) ⚙️   Настройка и оптимизация сервера${NC}"
     echo -e "${GREEN}6) 🌐  Меню IPv6 (Вкл/Выкл/Статус)${NC}"
-    echo -e "${CYAN}7) 🔄  ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
+    echo -e "${YELLOW}7) 🛠️   Системные утилиты (htop, ncdu, сеть, очистка)${NC}"
+    echo -e "${CYAN}8) 🔄  ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
     echo -e "${RED}X) 🚪  Выход в оболочку${NC}"
     echo -e "${BLUE}------------------------------------------------------${NC}"
 }
@@ -163,7 +164,8 @@ while true; do
         4) /usr/local/bin/menu_tests.sh ;;
         5) /usr/local/bin/menu_setup.sh ;;
         6) /usr/local/bin/ipv6-menu ;;
-        7)
+        7) /usr/local/bin/menu_utils.sh ;;
+        8)
            echo -e "${YELLOW}>>> Принудительное обновление через Git...${NC}"
            cd /root/VPS-Server-Menu || exit
            git fetch origin main &>/dev/null
