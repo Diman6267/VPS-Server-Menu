@@ -171,6 +171,7 @@ while true; do
            git fetch origin main &>/dev/null
            if git reset --hard origin/main > /dev/null; then 
                chmod +x /root/VPS-Server-Menu/*
+			   for file in /root/VPS-Server-Menu/*.sh /root/VPS-Server-Menu/server-menu /root/VPS-Server-Menu/ipv6-menu; do [ -f "$file" ] && ln -sf "$file" "/usr/local/bin/$(basename "$file")"; done
                echo -e "${GREEN}✅ Обновлено! Перезапуск...${NC}"
                sleep 1
                exec bash "$0"
