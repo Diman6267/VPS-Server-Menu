@@ -43,6 +43,7 @@ ln -sf "$TARGET_DIR/menu_tests.sh" /usr/local/bin/menu_tests.sh
 ln -sf "$TARGET_DIR/menu_setup.sh" /usr/local/bin/menu_setup.sh
 ln -sf "$TARGET_DIR/menu_warp.sh" /usr/local/bin/menu_warp.sh
 ln -sf "$TARGET_DIR/ipv6-menu" /usr/local/bin/ipv6-menu
+ln -sf "$TARGET_DIR/menu_utils.sh" /usr/local/bin/menu_utils.sh
     chmod +x "$TARGET_DIR/ipv6-menu"
 # 6. Настройка конфигурационного файла (Исправлено дублирование)
 if [ -f "$TARGET_DIR/_config_and_utils.sh" ]; then
