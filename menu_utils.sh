@@ -39,7 +39,8 @@ function run_utils_menu {
         echo -e "${GREEN}5) 📡 Пинг и трассировка (ping / mtr)${NC}"
         echo -e "${GREEN}6) 🔓 Активные порты (ss)${NC}"
         echo -e "${RED}7) 💀 Завершение процессов (kill)${NC}"
-        echo -e "${YELLOW}8) 🧹 Очистка системы (кэш, старые ядра, логи)${NC}"
+        echo -e "${YELLOW}8) 🧹 Очистка системы (кэш, логи, мусор)${NC}"
+        echo -e "${CYAN}9) 🔍 Проверка привязки домена к серверу${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
@@ -65,7 +66,6 @@ function run_utils_menu {
                 ;;
             3)
                 echo -e "\n${CYAN}--- Доступные интерфейсы ---${NC}"
-                # Получаем список интерфейсов, исключая loopback (lo)
                 ip -br link show | awk '{print $1}' | grep -v "^lo$" | awk '{print NR ") " $1}'
                 echo -e "A) Все сразу"
                 read -p "Выберите интерфейс: " net_opt
@@ -157,6 +157,31 @@ function run_utils_menu {
                        echo -e "${GREEN}Полная очистка завершена! Место освобождено.${NC}"
                        ;;
                 esac
+                read -p "Нажмите Enter..."
+                ;;
+            9)
+                echo -e "\n${CYAN}--- Проверка привязки домена ---${NC}"
+                read -p "Введите домен (например, sub.domain.com): " check_domain
+                if [ -n "$check_domain" ]; then
+                    echo -e "\n${YELLOW}Проверка DNS-записей...${NC}"
+                    domain_ip=$(getent hosts "$check_domain" | awk '{ print $1 }' | head -n 1)
+                    server_ip=$(curl -4 -s -m 4 ifconfig.me)
+                    
+                    if [ -z "$domain_ip" ]; then
+                        echo -e "${RED}❌ Не удалось определить IP. Домен не существует или DNS еще не обновились (обычно занимает от 5 минут до 24 часов).${NC}"
+                    else
+                        echo -e "IP этого сервера: ${GREEN}$server_ip${NC}"
+                        echo -e "IP домена:        ${YELLOW}$domain_ip${NC}\n"
+                        
+                        if [ "$domain_ip" == "$server_ip" ]; then
+                            echo -e "${GREEN}✅ Отлично! Домен успешно направлен на этот сервер.${NC}"
+                        else
+                            echo -e "${RED}⚠️ Внимание! IP не совпадают.${NC}"
+                            echo -e "• Если вы используете проксирование Cloudflare (оранжевое облако) — это нормально."
+                            echo -e "• Если нет — проверьте A-запись в настройках вашего регистратора."
+                        fi
+                    fi
+                fi
                 read -p "Нажмите Enter..."
                 ;;
             [Xx])
