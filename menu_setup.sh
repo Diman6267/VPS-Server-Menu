@@ -423,15 +423,50 @@ function create_or_resize_swap {
         *) echo -e "${BLUE}Действие отменено.${NC}"; return ;;
     esac
 
-    # Проверка свободного места на диске (в МБ)
+    # Сбрасываем дисковый кэш, чтобы освободить максимум ОЗУ
+    sync; echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null 2>&1
+
+    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
+    local swap_free_kb=$(grep -i '^SwapFree:' /proc/meminfo | awk '{print $2}')
+    local swap_used_kb=$((swap_total_kb - swap_free_kb))
+    local mem_avail_kb=$(grep -i '^MemAvailable:' /proc/meminfo | awk '{print $2}')
+
+    local TEMP_SWAP="/swap_buffer.tmp"
+    local need_buffer=0
+
+    # Если в свапе есть данные и свободной ОЗУ меньше чем (Занятый Swap + 150 МБ запаса)
+    if [ "$swap_used_kb" -gt 0 ] && [ "$mem_avail_kb" -lt $((swap_used_kb + 153600)) ]; then
+        need_buffer=1
+    fi
+
     local free_disk_mb=$(df -m / | awk 'NR==2 {print $4}')
     if [ "$free_disk_mb" -le $((size_mb + 512)) ]; then
         echo -e "${RED}❌ Недостаточно места на диске! Свободно: ${free_disk_mb} МБ, требуется минимум $((size_mb + 512)) МБ.${NC}"
         return
     fi
 
-    echo -e "${YELLOW}>>> Отключение текущего Swap (если активен)...${NC}"
-    sudo swapoff -a 2>/dev/null
+    # Создаём временный буфер подкачки, чтобы OOM Killer не убил swapoff
+    if [ "$need_buffer" -eq 1 ]; then
+        local buf_mb=$(( (swap_used_kb / 1024) + 256 ))
+        echo -e "${YELLOW}>>> ОЗУ заполнена. Создаём временный буфер подкачки (${buf_mb} МБ) для безопасного переноса...${NC}"
+        sudo rm -f "$TEMP_SWAP"
+        if ! sudo fallocate -l "${buf_mb}M" "$TEMP_SWAP" 2>/dev/null; then
+            sudo dd if=/dev/zero of="$TEMP_SWAP" bs=1M count="$buf_mb" status=none
+        fi
+        sudo chmod 600 "$TEMP_SWAP"
+        sudo mkswap "$TEMP_SWAP" > /dev/null
+        sudo swapon "$TEMP_SWAP"
+    fi
+
+    if grep -q "^$SWAP_FILE " /proc/swaps; then
+        echo -e "${YELLOW}>>> Отключение старого $SWAP_FILE...${NC}"
+        if ! sudo swapoff "$SWAP_FILE"; then
+            echo -e "${RED}❌ Не удалось отключить $SWAP_FILE (нехватка памяти).${NC}"
+            [ "$need_buffer" -eq 1 ] && sudo swapoff "$TEMP_SWAP" 2>/dev/null && sudo rm -f "$TEMP_SWAP"
+            return
+        fi
+    fi
+
     sudo rm -f "$SWAP_FILE"
 
     echo -e "${CYAN}>>> Выделение ${size_mb} МБ под $SWAP_FILE...${NC}"
@@ -449,72 +484,16 @@ function create_or_resize_swap {
         fi
         echo -e "${GREEN}✅ Swap размером ${size_mb} МБ успешно создан и активирован!${NC}"
     else
-        echo -e "${RED}❌ Ошибка активации swapon (возможно, ограничение виртуализации OpenVZ/LXC).${NC}"
+        echo -e "${RED}❌ Ошибка активации swapon.${NC}"
         sudo rm -f "$SWAP_FILE"
     fi
-}
 
-function remove_swap {
-    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
-    if [ "$swap_total_kb" -eq 0 ] && [ ! -f "$SWAP_FILE" ]; then
-        echo -e "${YELLOW}Swap уже отключен и файл отсутствует.${NC}"
-        return
+    # Отключаем и удаляем временный буфер (данные перетекают в новый 2 ГБ /swapfile)
+    if [ "$need_buffer" -eq 1 ]; then
+        echo -e "${YELLOW}>>> Перенос данных в новый Swap и удаление временного буфера...${NC}"
+        sudo swapoff "$TEMP_SWAP" 2>/dev/null
+        sudo rm -f "$TEMP_SWAP"
     fi
-
-    read -p "Отключить и полностью удалить Swap-файл? [y/N]: " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}Отменено.${NC}"
-        return
-    fi
-
-    echo -e "${CYAN}>>> Отключение Swap и удаление $SWAP_FILE...${NC}"
-    sudo swapoff -a
-    sudo rm -f "$SWAP_FILE"
-    sudo sed -i "\|^$SWAP_FILE |d" /etc/fstab
-    echo -e "${GREEN}✅ Swap полностью отключен и удален из /etc/fstab.${NC}"
-}
-
-function flush_swap {
-    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
-    local swap_free_kb=$(grep -i '^SwapFree:' /proc/meminfo | awk '{print $2}')
-    local swap_used_kb=$((swap_total_kb - swap_free_kb))
-    local mem_avail_kb=$(grep -i '^MemAvailable:' /proc/meminfo | awk '{print $2}')
-
-    if [ "$swap_total_kb" -eq 0 ]; then
-        echo -e "${RED}❌ Swap не активен.${NC}"
-        return
-    fi
-
-    if [ "$mem_avail_kb" -le "$swap_used_kb" ]; then
-        echo -e "${RED}❌ Недостаточно свободной ОЗУ для выгрузки данных из Swap!${NC}"
-        return
-    fi
-
-    echo -e "${CYAN}>>> Перезагрузка данных из Swap обратно в ОЗУ...${NC}"
-    sudo swapoff -a && sudo swapon -a
-    echo -e "${GREEN}✅ Swap успешно очищен!${NC}"
-}
-
-function set_swappiness {
-    local current_sw=$(cat /proc/sys/vm/swappiness)
-    echo -e "\n${CYAN}>>> НАСТРОЙКА VM.SWAPPINESS (Текущее значение: ${GREEN}$current_sw${CYAN})${NC}"
-    echo -e "${YELLOW}Подсказка: 10 — оптимально для VPS с SSD (использовать только при нехватке ОЗУ), 60 — стандарт Linux.${NC}"
-    read -p "Введите новое значение от 0 до 100 (Enter для отмены): " new_sw
-
-    if [ -z "$new_sw" ]; then
-        echo -e "${BLUE}Отменено.${NC}"
-        return
-    fi
-
-    if [[ ! "$new_sw" =~ ^[0-9]+$ ]] || [ "$new_sw" -lt 0 ] || [ "$new_sw" -gt 100 ]; then
-        echo -e "${RED}❌ Введите число от 0 до 100.${NC}"
-        return
-    fi
-
-    sudo sysctl vm.swappiness="$new_sw" > /dev/null
-    sudo sed -i '/vm.swappiness/d' /etc/sysctl.conf
-    echo "vm.swappiness=$new_sw" | sudo tee -a /etc/sysctl.conf > /dev/null
-    echo -e "${GREEN}✅ Значение vm.swappiness=$new_sw применено и сохранено в /etc/sysctl.conf.${NC}"
 }
 
 function manage_swap_menu {
