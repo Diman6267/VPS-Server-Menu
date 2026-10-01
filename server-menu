@@ -132,20 +132,32 @@ fi
     else 
         status_mtp="${RED}Остановлен${NC}"
     fi
-
+	# Проверка Remnawave (Панель и Нода)
+ 	if command -v docker &> /dev/null && sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "remnawave"; then 
+    	 status_rw_panel="${GREEN}РАБОТАЕТ${NC}"
+	 else 
+   	  status_rw_panel="${RED}Остановлен${NC}"
+	 fi
+	 if command -v docker &> /dev/null && sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -Eq "^remnanode"; then 
+   	  status_rw_node="${GREEN}РАБОТАЕТ${NC}"
+	 else 
+  	   status_rw_node="${RED}Остановлен${NC}"
+	 fi
     echo -e "    🎛️   X-UI:        [$status_xui]"
     echo -e "    🎭  Hysteria2:   [$status_hy2]"
     echo -e "    ✈️   MTProxy:     [$status_mtp]"
+	echo -e "    🌊  Remnawave:   Панель [$status_rw_panel] | Нода [$status_rw_node]"
     
     echo -e "${BLUE}--- ДЕЙСТВИЯ ---------------------------------------${NC}"
     echo -e "${YELLOW}1) 🎛️   Управление X-UI (Установка/Запуск/Статус)${NC}"
     echo -e "${YELLOW}2) 🎭  Управление Hysteria2 (Установка/Старт/Стоп/Пользователи)${NC}"
     echo -e "${YELLOW}3) ✈️   Управление MTProxy (Установка/Пользователи)${NC}"
-    echo -e "${GREEN}4) 🧪  Тестирование сервера (Скорость/Блокировки/Сканер)${NC}"
-    echo -e "${GREEN}5) ⚙️   Настройка и оптимизация сервера${NC}"
-    echo -e "${GREEN}6) 🌐  Меню IPv6 (Вкл/Выкл/Статус)${NC}"
-    echo -e "${YELLOW}7) 🛠️   Системные утилиты (htop, ncdu, сеть, очистка)${NC}"
-    echo -e "${CYAN}8) 🔄  ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
+	echo -e "${YELLOW}4) 🌊  Управление Remnawave (Панель/Нода/Selfsteal/Бэкап)${NC}"
+    echo -e "${GREEN}5) 🧪  Тестирование сервера (Скорость/Блокировки/Сканер)${NC}"
+    echo -e "${GREEN}6) ⚙️   Настройка и оптимизация сервера${NC}"
+    echo -e "${GREEN}7) 🌐  Меню IPv6 (Вкл/Выкл/Статус)${NC}"
+    echo -e "${YELLOW}8) 🛠️   Системные утилиты (htop, ncdu, сеть, очистка)${NC}"
+    echo -e "${CYAN}9) 🔄  ОБНОВИТЬ СКРИПТЫ (с GitHub)${NC}"
     echo -e "${RED}X) 🚪  Выход в оболочку${NC}"
     echo -e "${BLUE}------------------------------------------------------${NC}"
 }
@@ -161,11 +173,12 @@ while true; do
         1) /usr/local/bin/menu_xui.sh ;;
         2) /usr/local/bin/menu_hysteria.sh ;;
 		3) /usr/local/bin/menu_mtproxy.sh ;;
-        4) /usr/local/bin/menu_tests.sh ;;
-        5) /usr/local/bin/menu_setup.sh ;;
-        6) /usr/local/bin/ipv6-menu ;;
-        7) /usr/local/bin/menu_utils.sh ;;
-        8)
+		4) /usr/local/bin/menu_remnawave.sh ;;
+        5) /usr/local/bin/menu_tests.sh ;;
+        6) /usr/local/bin/menu_setup.sh ;;
+        7) /usr/local/bin/ipv6-menu ;;
+        8) /usr/local/bin/menu_utils.sh ;;
+        9)
            echo -e "${YELLOW}>>> Принудительное обновление через Git...${NC}"
            cd /root/VPS-Server-Menu || exit
            git fetch origin main &>/dev/null
