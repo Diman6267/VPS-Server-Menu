@@ -41,11 +41,14 @@ function show_rw_menu {
     local st_sub=$(get_container_status "remnawave-subscription-page")
     local st_node=$(get_container_status "remnanode")
     local st_steal=$(get_container_status "caddy|remnawave-selfsteal|selfsteal")
+    if [[ "$st_steal" == *"Не установлен"* ]] && systemctl is-active --quiet caddy 2>/dev/null; then
+        st_steal="${GREEN}РАБОТАЕТ (Systemd)${NC}"
+    fi
     local st_bot=$(get_container_status "remnawave-admin-bot-1")
 
     local cli_rw=$(command -v remnawave &>/dev/null && echo -e "${GREEN}Установлен${NC}" || echo -e "${YELLOW}Нет${NC}")
     local cli_node=$(command -v remnanode &>/dev/null && echo -e "${GREEN}Установлен${NC}" || echo -e "${YELLOW}Нет${NC}")
-    local cli_steal=$(command -v selfsteal &>/dev/null && echo -e "${GREEN}Установлен${NC}" || echo -e "${YELLOW}Нет${NC}")
+    local cli_steal=$(command -v selfsteal &>/dev/null && echo -e "${GREEN}Установлен${NC}" || (systemctl is-active --quiet caddy 2>/dev/null && echo -e "${GREEN}Systemd${NC}" || echo -e "${YELLOW}Нет${NC}"))
 
     echo -e "${CYAN}======================================================${NC}"
     echo -e "${CYAN}           🌊  УПРАВЛЕНИЕ REMNAWAVE  🌊               ${NC}"
@@ -73,7 +76,8 @@ function show_rw_menu {
     echo -e "${GREEN}--- 🎭  МАСКИРОВКА И ДОП. МОДУЛИ ---${NC}"
     echo -e "${CYAN}8) 🔒  Caddy Selfsteal — установка и меню маскировки Reality${NC}"
     echo -e "${CYAN}9) 🌐  WARP & Tor Manager для Xray (wtm)${NC}"
-    echo -e "${CYAN}10) 🤖 Перезапустить Админ-бота (/opt/remnawave-admin)${NC}"
+    echo -e "${CYAN}10) 🤖 Перезапустить Админ-бота (/opt/remnawave-admin)
+11) ♻️  Восстановить доп. стек из бэкапа (Caddy + Бот Case211 + Нода)${NC}"
     echo ""
     echo -e "${RED}0) 🔙  Назад в главное меню${NC}"
     echo -e "${BLUE}------------------------------------------------------${NC}"
