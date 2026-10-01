@@ -160,14 +160,15 @@ function run_tests_menu {
         echo -e "${YELLOW}5) 📊  YABS Benchmark${NC}"
         echo -e "${YELLOW}6) 🛡️   IPQuality. Проверка IP сервера на блокировки зарубежными сервисами${NC}"
         echo -e "${YELLOW}7) 📡  Параметры сервера и проверка скорости к зарубежным провайдерам${NC}"
-        echo -e "${YELLOW}8) 💻  Тест на процессор${NC}"
-        echo -e "${YELLOW}9) 🔍  Запуск Realitls Scaner${NC}"
-		echo -e "${YELLOW}10)🕵️‍♂️  Запустить DPI Detector (Анализ цензуры)${NC}"
-        echo -e "${YELLOW}11)🔍  Запустить SNI Scan (Скан подсети)${NC}"
+		echo -e "${YELLOW}8)⚡  Параметры сервера и проверка скорости к российским серверам${NC}"
+        echo -e "${YELLOW}9) 💻  Тест на процессор${NC}"
+        echo -e "${YELLOW}10) 🔍  Запуск Realitls Scaner${NC}"
+		echo -e "${YELLOW}11)🕵️‍♂️  Запустить DPI Detector (Анализ цензуры)${NC}"
+        echo -e "${YELLOW}12)🔍  Запустить SNI Scan (Скан подсети)${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
-        read -p "Ваш выбор [1-11, X]: " choice
+        read -p "Ваш выбор [1-12, X]: " choice
         echo ""
 
         case $choice in
@@ -209,8 +210,11 @@ fi
                 echo -e "${CYAN}>>> Параметры сервера и проверка скорости к зарубежным провайдерам...${NC}"
                 wget -qO- bench.sh | bash
                 ;;
-
 			8)
+                echo -e "${CYAN}>>> Запуск TLab Bench (bench.tlab.pw)...${NC}"
+                wget -qO- bench.tlab.pw | bash
+                ;;
+			9)
                 echo -e "${CYAN}>>> Запуск теста на процессор...${NC}"
                 # Проверка sysbench прямо перед запуском
     if ! command -v sysbench &> /dev/null; then
@@ -219,11 +223,11 @@ fi
     fi
 				sysbench cpu run --threads=1
                 ;;	
-            9) run_scanner ;;
-			10)
+            10) run_scanner ;;
+			11)
                 run_dpi_detector
                 ;;
-            11)
+            12)
                 run_sni_scan
                 ;;
             [Xx]) return ;;
