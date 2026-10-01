@@ -39,7 +39,18 @@ function get_ufw_status {
 function get_timezone_status {
     timedatectl | grep "Time zone" | awk '{print $3}'
 }
-
+function get_swap_status {
+    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
+    local swap_free_kb=$(grep -i '^SwapFree:' /proc/meminfo | awk '{print $2}')
+    if [ -z "$swap_total_kb" ] || [ "$swap_total_kb" -eq 0 ]; then
+        echo -e "${RED}ОТКЛЮЧЕН${NC}"
+    else
+        local swap_total_mb=$((swap_total_kb / 1024))
+        local swap_used_mb=$(( (swap_total_kb - swap_free_kb) / 1024 ))
+        local swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null || echo "?")
+        echo -e "${GREEN}АКТИВЕН (${swap_total_mb} МБ | Исп: ${swap_used_mb} МБ | Swappiness: ${swappiness})${NC}"
+    fi
+}
 # ----------------------------------------------------------------------
 # НОВЫЕ ПУНКТЫ (UFW И TIMEZONE)
 # ----------------------------------------------------------------------
@@ -382,6 +393,156 @@ function manage_ssl_menu {
     done
 }
 # ----------------------------------------------------------------------
+# SWAP: УПРАВЛЕНИЕ ФАЙЛОМ ПОДКАЧКИ
+# ----------------------------------------------------------------------
+
+SWAP_FILE="/swapfile"
+
+function create_or_resize_swap {
+    echo -e "\n${CYAN}>>> ВЫБОР РАЗМЕРА SWAP-ФАЙЛА${NC}"
+    echo -e "1) 1 ГБ (1024 МБ)"
+    echo -e "2) 2 ГБ (2048 МБ) — Рекомендуется для VPS с 1-2 ГБ ОЗУ"
+    echo -e "3) 4 ГБ (4096 МБ)"
+    echo -e "4) Указать свой размер (в МБ)"
+    echo -e "0) Отмена"
+    read -p "Ваш выбор [1-4, 0]: " sz_choice
+
+    local size_mb=0
+    case $sz_choice in
+        1) size_mb=1024 ;;
+        2) size_mb=2048 ;;
+        3) size_mb=4096 ;;
+        4)
+            read -p "Введите размер в МБ (например, 1536): " custom_mb
+            if [[ ! "$custom_mb" =~ ^[0-9]+$ ]] || [ "$custom_mb" -lt 64 ]; then
+                echo -e "${RED}❌ Некорректный размер (минимум 64 МБ).${NC}"
+                return
+            fi
+            size_mb=$custom_mb
+            ;;
+        *) echo -e "${BLUE}Действие отменено.${NC}"; return ;;
+    esac
+
+    # Проверка свободного места на диске (в МБ)
+    local free_disk_mb=$(df -m / | awk 'NR==2 {print $4}')
+    if [ "$free_disk_mb" -le $((size_mb + 512)) ]; then
+        echo -e "${RED}❌ Недостаточно места на диске! Свободно: ${free_disk_mb} МБ, требуется минимум $((size_mb + 512)) МБ.${NC}"
+        return
+    fi
+
+    echo -e "${YELLOW}>>> Отключение текущего Swap (если активен)...${NC}"
+    sudo swapoff -a 2>/dev/null
+    sudo rm -f "$SWAP_FILE"
+
+    echo -e "${CYAN}>>> Выделение ${size_mb} МБ под $SWAP_FILE...${NC}"
+    if ! sudo fallocate -l "${size_mb}M" "$SWAP_FILE" 2>/dev/null; then
+        echo -e "${YELLOW}fallocate не поддерживается ФС, используем dd (подождите)...${NC}"
+        sudo dd if=/dev/zero of="$SWAP_FILE" bs=1M count="$size_mb" status=progress
+    fi
+
+    sudo chmod 600 "$SWAP_FILE"
+    sudo mkswap "$SWAP_FILE" > /dev/null
+
+    if sudo swapon "$SWAP_FILE"; then
+        if ! grep -q "^$SWAP_FILE " /etc/fstab; then
+            echo "$SWAP_FILE none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
+        fi
+        echo -e "${GREEN}✅ Swap размером ${size_mb} МБ успешно создан и активирован!${NC}"
+    else
+        echo -e "${RED}❌ Ошибка активации swapon (возможно, ограничение виртуализации OpenVZ/LXC).${NC}"
+        sudo rm -f "$SWAP_FILE"
+    fi
+}
+
+function remove_swap {
+    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
+    if [ "$swap_total_kb" -eq 0 ] && [ ! -f "$SWAP_FILE" ]; then
+        echo -e "${YELLOW}Swap уже отключен и файл отсутствует.${NC}"
+        return
+    fi
+
+    read -p "Отключить и полностью удалить Swap-файл? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Отменено.${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}>>> Отключение Swap и удаление $SWAP_FILE...${NC}"
+    sudo swapoff -a
+    sudo rm -f "$SWAP_FILE"
+    sudo sed -i "\|^$SWAP_FILE |d" /etc/fstab
+    echo -e "${GREEN}✅ Swap полностью отключен и удален из /etc/fstab.${NC}"
+}
+
+function flush_swap {
+    local swap_total_kb=$(grep -i '^SwapTotal:' /proc/meminfo | awk '{print $2}')
+    local swap_free_kb=$(grep -i '^SwapFree:' /proc/meminfo | awk '{print $2}')
+    local swap_used_kb=$((swap_total_kb - swap_free_kb))
+    local mem_avail_kb=$(grep -i '^MemAvailable:' /proc/meminfo | awk '{print $2}')
+
+    if [ "$swap_total_kb" -eq 0 ]; then
+        echo -e "${RED}❌ Swap не активен.${NC}"
+        return
+    fi
+
+    if [ "$mem_avail_kb" -le "$swap_used_kb" ]; then
+        echo -e "${RED}❌ Недостаточно свободной ОЗУ для выгрузки данных из Swap!${NC}"
+        return
+    fi
+
+    echo -e "${CYAN}>>> Перезагрузка данных из Swap обратно в ОЗУ...${NC}"
+    sudo swapoff -a && sudo swapon -a
+    echo -e "${GREEN}✅ Swap успешно очищен!${NC}"
+}
+
+function set_swappiness {
+    local current_sw=$(cat /proc/sys/vm/swappiness)
+    echo -e "\n${CYAN}>>> НАСТРОЙКА VM.SWAPPINESS (Текущее значение: ${GREEN}$current_sw${CYAN})${NC}"
+    echo -e "${YELLOW}Подсказка: 10 — оптимально для VPS с SSD (использовать только при нехватке ОЗУ), 60 — стандарт Linux.${NC}"
+    read -p "Введите новое значение от 0 до 100 (Enter для отмены): " new_sw
+
+    if [ -z "$new_sw" ]; then
+        echo -e "${BLUE}Отменено.${NC}"
+        return
+    fi
+
+    if [[ ! "$new_sw" =~ ^[0-9]+$ ]] || [ "$new_sw" -lt 0 ] || [ "$new_sw" -gt 100 ]; then
+        echo -e "${RED}❌ Введите число от 0 до 100.${NC}"
+        return
+    fi
+
+    sudo sysctl vm.swappiness="$new_sw" > /dev/null
+    sudo sed -i '/vm.swappiness/d' /etc/sysctl.conf
+    echo "vm.swappiness=$new_sw" | sudo tee -a /etc/sysctl.conf > /dev/null
+    echo -e "${GREEN}✅ Значение vm.swappiness=$new_sw применено и сохранено в /etc/sysctl.conf.${NC}"
+}
+
+function manage_swap_menu {
+    while true; do
+        clear
+        echo -e "${CYAN}--- 💾 УПРАВЛЕНИЕ ФАЙЛОМ ПОДКАЧКИ (SWAP) -----------------${NC}"
+        echo -e "    Статус: [$(get_swap_status)]"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        echo -e "1) 🟢  Создать / Изменить размер Swap-файла"
+        echo -e "2) 🔴  Отключить и удалить Swap-файл"
+        echo -e "3) 🔄  Очистить Swap (перенести данные обратно в ОЗУ)"
+        echo -e "4) ⚙️   Настроить агрессивность (vm.swappiness)"
+        echo -e "X) 🔙  Назад"
+        echo -e "${BLUE}----------------------------------------------------------${NC}"
+        read -p "Ваш выбор [1-4, X]: " sw_choice
+
+        case $sw_choice in
+            1) create_or_resize_swap ;;
+            2) remove_swap ;;
+            3) flush_swap ;;
+            4) set_swappiness ;;
+            [Xx]) return ;;
+            *) echo -e "${RED}❌ Неверный ввод.${NC}" ;;
+        esac
+        read -p "Нажмите Enter для продолжения..."
+    done
+}
+# ----------------------------------------------------------------------
 # ГЛАВНЫЙ ЦИКЛ МЕНЮ УСТАНОВКИ (Оригинал + 2 пункта)
 # ----------------------------------------------------------------------
 
@@ -400,6 +561,7 @@ function run_setup_menu {
         echo -e "🏓  PING:      [$(if [ "$PING_STATUS" == "enabled" ]; then echo -e "${GREEN}РАЗРЕШЕН${NC}"; else echo -e "${RED}ЗАПРЕЩЕН${NC}"; fi)]"
         echo -e "🛡️   UFW:       [$(if [ "$(get_ufw_status)" == "active" ]; then echo -e "${GREEN}АКТИВЕН${NC}"; else echo -e "${RED}ОТКЛЮЧЕН${NC}"; fi)]"
         echo -e "🕒  Timezone:  [${YELLOW}$(get_timezone_status)${NC}]"
+        echo -e "💾  SWAP:      [$(get_swap_status)]"
         echo -e "${BLUE}------------------------------------------------------${NC}"
 
        echo -e "${CYAN}1) 📈  Управление BBR (Оптимизация сети)${NC}"
@@ -408,6 +570,7 @@ function run_setup_menu {
         echo -e "${CYAN}4) 🕒  Настройка Timezone (Часовой пояс)${NC}"
         echo -e "${CYAN}5) 🔐  Управление SSL сертификатами${NC}"
         echo -e "${YELLOW}6) ☁️   Управление Cloudflare WARP${NC}"
+        echo -e "${CYAN}7) 💾  Управление Swap (Файл подкачки)${NC}"
         echo -e "${RED}X) 🔙  Назад в главное меню${NC}"
         echo -e "${BLUE}------------------------------------------------------${NC}"
         
@@ -418,9 +581,8 @@ function run_setup_menu {
             3) show_ufw_menu ;;
             4) set_timezone_menu ;;
             5) manage_ssl_menu ;;
-            6)
-            bash /root/VPS-Server-Menu/menu_warp.sh
-            ;;
+            6) bash /root/VPS-Server-Menu/menu_warp.sh ;;
+            7) manage_swap_menu ;;
             [Xx]) return ;;
         esac
     done
