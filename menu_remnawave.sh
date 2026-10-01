@@ -15,8 +15,8 @@ function run_dignezzz {
     shift
     local args="$@"
 
-    echo -e "${CYAN}>>> Загрузка ${script_name}...${NC}"
-    if curl -Isf --connect-timeout 4 "${GITHUB_BASE}/${script_name}" >/dev/null 2>&1; then
+    echo -e "${CYAN}>>> Загрузка ${script_name} (${args})...${NC}"
+    if curl -ILsf --connect-timeout 5 "${GITHUB_BASE}/${script_name}" >/dev/null 2>&1; then
         bash <(curl -Ls "${GITHUB_BASE}/${script_name}") @ $args
     else
         echo -e "${YELLOW}⚠️ GitHub недоступен, используем зеркало jsDelivr...${NC}"
@@ -40,6 +40,7 @@ function show_rw_menu {
     local st_panel=$(get_container_status "remnawave")
     local st_sub=$(get_container_status "remnawave-subscription-page")
     local st_node=$(get_container_status "remnanode")
+    local st_steal=$(get_container_status "caddy|remnawave-selfsteal|selfsteal")
     local st_bot=$(get_container_status "remnawave-admin-bot-1")
 
     local cli_rw=$(command -v remnawave &>/dev/null && echo -e "${GREEN}Установлен${NC}" || echo -e "${YELLOW}Нет${NC}")
@@ -53,6 +54,7 @@ function show_rw_menu {
     echo -e "  🖥️   Панель (remnawave):       [$st_panel]"
     echo -e "  📄  Страница подписок:        [$st_sub]"
     echo -e "  🛰️   Нода (remnanode):         [$st_node]"
+    echo -e "  🔒  Selfsteal (Caddy):        [$st_steal]"
     echo -e "  🤖  Админ-бот (Case211):      [$st_bot]"
     echo -e "${BLUE}--- УТИЛИТЫ DIGNEZZZ CLI -----------------------------${NC}"
     echo -e "  remnawave: [$cli_rw] | remnanode: [$cli_node] | selfsteal: [$cli_steal]"
@@ -69,7 +71,7 @@ function show_rw_menu {
     echo -e "${YELLOW}7) 🔄  Перезапустить стек Панели (/opt/remnawave)${NC}"
     echo ""
     echo -e "${GREEN}--- 🎭  МАСКИРОВКА И ДОП. МОДУЛИ ---${NC}"
-    echo -e "${CYAN}8) 🔒  Caddy Selfsteal — маскировка для Reality (selfsteal)${NC}"
+    echo -e "${CYAN}8) 🔒  Caddy Selfsteal — установка и меню маскировки Reality${NC}"
     echo -e "${CYAN}9) 🌐  WARP & Tor Manager для Xray (wtm)${NC}"
     echo -e "${CYAN}10) 🤖 Перезапустить Админ-бота (/opt/remnawave-admin)${NC}"
     echo ""
@@ -93,6 +95,7 @@ while true; do
                 run_dignezzz "remnanode.sh" "install-script"
             fi
             sudo remnanode
+            read -p "Нажмите Enter для продолжения..."
             ;;
         3)
             if [ -d /opt/remnanode ]; then
@@ -112,6 +115,7 @@ while true; do
                 run_dignezzz "remnawave.sh" "install-script"
             fi
             sudo remnawave
+            read -p "Нажмите Enter для продолжения..."
             ;;
         6)
             if ! command -v remnawave &>/dev/null; then
@@ -130,11 +134,21 @@ while true; do
             read -p "Нажмите Enter для продолжения..."
             ;;
         8)
-            if ! command -v selfsteal &>/dev/null; then
-                echo -e "${YELLOW}Устанавливаем CLI selfsteal...${NC}"
-                run_dignezzz "selfsteal.sh" "install-script"
+            if command -v selfsteal &>/dev/null; then
+                sudo selfsteal
+            else
+                echo -e "${YELLOW}CLI selfsteal ещё не установлен. Выберите действие:${NC}"
+                echo "  1) 🚀 Установить Caddy Selfsteal с нуля (@ install)"
+                echo "  2) 🎛️ Только поставить CLI и открыть меню"
+                read -p "Ваш выбор [1-2, Enter=1]: " st_act
+                if [ "$st_act" == "2" ]; then
+                    run_dignezzz "selfsteal.sh" "install-script"
+                    sudo selfsteal
+                else
+                    run_dignezzz "selfsteal.sh" "install"
+                fi
             fi
-            sudo selfsteal
+            read -p "Нажмите Enter для продолжения..."
             ;;
         9)
             if ! command -v wtm &>/dev/null; then
@@ -142,6 +156,7 @@ while true; do
                 run_dignezzz "wtm.sh" "install-script"
             fi
             sudo wtm
+            read -p "Нажмите Enter для продолжения..."
             ;;
         10)
             if [ -d /opt/remnawave-admin ]; then
