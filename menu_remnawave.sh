@@ -171,6 +171,34 @@ while true; do
             fi
             read -p "Нажмите Enter для продолжения..."
             ;;
+        11)
+            echo -e "\n${CYAN}♻️  Поиск последнего полного бэкапа...${NC}"
+            latest_archive=$(ls -t /opt/remnawave/backups/*.tar.gz /root/remnawave_scheduled_*.tar.gz 2>/dev/null | head -n 1)
+            if [ -z "$latest_archive" ]; then
+                read -rp "Архивы не найдены. Укажите полный путь к файлу .tar.gz: " latest_archive
+            else
+                echo -e "Найден архив: ${GREEN}${latest_archive}${NC}"
+                read -rp "Использовать его для восстановления Caddy, Бота и Ноды? (Y/n): " confirm_rest
+                if [[ "$confirm_rest" =~ ^[Nn]$ ]]; then
+                    read -rp "Укажите полный путь к нужному архиву .tar.gz: " latest_archive
+                fi
+            fi
+            if [ -f "$latest_archive" ]; then
+                tmp_rest="/tmp/rw_full_restore_$$"
+                mkdir -p "$tmp_rest"
+                tar xzf "$latest_archive" -C "$tmp_rest"
+                restore_script=$(find "$tmp_rest" -name "restore-full-stack.sh" | head -n 1)
+                if [ -n "$restore_script" ]; then
+                    bash "$restore_script"
+                else
+                    echo -e "${RED}❌ В выбранном архиве нет блока restore-full-stack.sh (это старый архив).${NC}"
+                fi
+                rm -rf "$tmp_rest"
+            else
+                echo -e "${RED}❌ Файл архива не найден: ${latest_archive}${NC}"
+            fi
+            read -p "Нажмите Enter для продолжения..."
+            ;;
         0|[QqXx])
             break
             ;;
