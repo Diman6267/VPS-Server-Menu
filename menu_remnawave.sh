@@ -36,6 +36,7 @@ function get_container_status {
 }
 
 function show_rw_menu {
+    [ -f /root/VPS-Server-Menu/patch_full_backup.py ] && python3 /root/VPS-Server-Menu/patch_full_backup.py >/dev/null 2>&1
     clear
     local st_panel=$(get_container_status "remnawave")
     local st_sub=$(get_container_status "remnawave-subscription-page")
