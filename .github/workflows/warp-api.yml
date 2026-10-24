@@ -19,5 +19,6 @@ jobs:
       - name: Offline regression
         run: |
           bash tests/test_warp_endpoints.sh
+          bash tests/test_warp_cron.sh
           bash tests/test_noninteractive_install.sh
           git diff --check

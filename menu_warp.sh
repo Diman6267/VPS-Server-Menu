@@ -13,13 +13,36 @@ function get_warp_status {
     if ! command -v warp-cli &> /dev/null; then
         echo -e "${RED}НЕ УСТАНОВЛЕН${NC}"
     elif systemctl is-active --quiet warp-svc; then
-        echo -e "${GREEN}РАБОТАЕТ${NC}"
+        echo -e "${GREEN}АКТИВЕН (только systemd)${NC}"
     else
         echo -e "${YELLOW}ОСТАНОВЛЕН${NC}"
     fi
 }
 
+function filter_warp_cron {
+    awk '!(NF >= 8 && $1 !~ /^#/ && $6 == "systemctl" && $7 == "restart" && $8 == "warp-svc")'
+}
+
+function update_warp_cron_rule {
+    local cron_rule="${1:-}" existing filtered
+    if ! existing=$(LC_ALL=C crontab -l 2>&1); then
+        case "$existing" in
+            *'no crontab for '*) existing='' ;;
+            *) echo 'Не удалось прочитать crontab; расписание не изменено.' >&2; return 1 ;;
+        esac
+    fi
+    filtered=$(printf '%s\n' "$existing" | filter_warp_cron)
+    {
+        [ -z "$filtered" ] || printf '%s\n' "$filtered"
+        [ -z "$cron_rule" ] || printf '%s\n' "$cron_rule"
+    } | crontab - || {
+        echo 'Не удалось применить crontab; прежнее расписание сохранено.' >&2
+        return 1
+    }
+}
+
 function setup_warp_cron {
+    local cron_choice cron_rule custom_cron
     while true; do
         clear
         echo -e "${CYAN}--- 🔄 НАСТРОЙКА АВТОПЕРЕЗАПУСКА WARP --------------------${NC}"
@@ -32,12 +55,16 @@ function setup_warp_cron {
         echo -e "5) ✍️   Задать свой график (формат Cron)"
         echo -e "X) 🔙  Назад"
         echo -e "${BLUE}----------------------------------------------------------${NC}"
-        read -p "Выбор: " cron_choice
+        read -r -p "Выбор: " cron_choice
         case $cron_choice in
             1) cron_rule="0 3 * * * systemctl restart warp-svc >/dev/null 2>&1" ;;
             2) cron_rule="0 3 * * 0 systemctl restart warp-svc >/dev/null 2>&1" ;;
             3) cron_rule="0 */12 * * * systemctl restart warp-svc >/dev/null 2>&1" ;;
-            4) crontab -l 2>/dev/null | grep -v "warp-svc" | crontab -; echo -e "${GREEN}✅ Отключено.${NC}"; sleep 1; return ;;
+            4)
+                if update_warp_cron_rule ''; then
+                    echo -e "${GREEN}✅ Отключено.${NC}"; sleep 1; return
+                fi
+                sleep 2; continue ;;
             5)
                 echo -e "\n${CYAN}╭─── Справка по формату Cron ──────────────────────╮${NC}"
                 echo -e "${CYAN}│${NC}  ${YELLOW}* * * * *${NC}                                       ${CYAN}│${NC}"
@@ -55,7 +82,7 @@ function setup_warp_cron {
                 echo -e "  ${GREEN}0 2 * * 1-5${NC}  (По будням в 02:00)"
                 echo -e "  ${GREEN}0 12 * * 6,0${NC} (По выходным в 12:00)"
                 echo ""
-                read -p "Ваш график (5 значений через пробел): " custom_cron
+                read -r -p "Ваш график (5 значений через пробел): " custom_cron
                 
                 # Простая проверка: должно быть ровно 5 "слов" (значений)
                 if [[ $(echo "$custom_cron" | wc -w) -eq 5 ]]; then
@@ -71,15 +98,17 @@ function setup_warp_cron {
         esac
         
         # Применяем правило
-        crontab -l 2>/dev/null | grep -v "warp-svc" | crontab -
-        (crontab -l 2>/dev/null; echo "$cron_rule") | crontab -
-        echo -e "${GREEN}✅ Расписание обновлено!${NC}"; sleep 1; return
+        if update_warp_cron_rule "$cron_rule"; then
+            echo -e "${GREEN}✅ Расписание обновлено!${NC}"; sleep 1; return
+        fi
+        sleep 2
     done
 }
 
 
 function get_warp_cron_status {
-    local cron_rule=$(crontab -l 2>/dev/null | grep -w "warp-svc")
+    local cron_rule
+    cron_rule=$(crontab -l 2>/dev/null | awk 'NF >= 8 && $1 !~ /^#/ && $6 == "systemctl" && $7 == "restart" && $8 == "warp-svc" {print; exit}')
     
     if [ -z "$cron_rule" ]; then
         echo -e "${RED}ВЫКЛЮЧЕН${NC}"
@@ -98,35 +127,35 @@ function get_warp_cron_status {
 
     # 1. Ежедневно в определенное время (0 2 * * * или 0 2 * * 0-7)
     elif [[ "$d" == "*" && "$mon" == "*" && ("$dow" == "*" || "$dow" == "0-7") && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         echo -e "${GREEN}Ежедневно в $formatted_time${NC}"
 
     # 2. По будням (например, 0 2 * * 1-5)
     elif [[ "$d" == "*" && "$mon" == "*" && "$dow" == "1-5" && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         echo -e "${GREEN}По будням в $formatted_time${NC}"
 
     # 3. По выходным (например, 0 2 * * 6,0 или 6,7)
     elif [[ "$d" == "*" && "$mon" == "*" && ("$dow" == "6,0" || "$dow" == "0,6" || "$dow" == "6,7") && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         echo -e "${GREEN}По выходным в $formatted_time${NC}"
 
     # 4. Раз в неделю (конкретный день, например 0 3 * * 0)
     elif [[ "$d" == "*" && "$mon" == "*" && "$dow" =~ ^[0-7]$ && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         local days=("Вс" "Пн" "Вт" "Ср" "Чт" "Пт" "Сб" "Вс")
         echo -e "${GREEN}Раз в неделю (${days[$dow]} $formatted_time)${NC}"
 
     # 5. Ежемесячно (например, 0 5 15 * * -> 15-го числа)
     elif [[ "$d" =~ ^[0-9]+$ && "$mon" == "*" && "$dow" == "*" && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         echo -e "${GREEN}Каждое $d-е число в $formatted_time${NC}"
 
     # 6. Точная дата / Ежегодно (например, 23 4 21 3 * -> 21 Марта в 04:23)
     elif [[ "$d" =~ ^[0-9]+$ && "$mon" =~ ^[0-9]+$ && "$dow" == "*" && "$h" =~ ^[0-9]+$ && "$m" =~ ^[0-9]+$ ]]; then
-        printf -v formatted_time "%02d:%02d" "$h" "$m"
+        printf -v formatted_time "%02d:%02d" "$((10#$h))" "$((10#$m))"
         local months=("" "Января" "Февраля" "Марта" "Апреля" "Мая" "Июня" "Июля" "Августа" "Сентября" "Октября" "Ноября" "Декабря")
-        echo -e "${GREEN}Ежегодно $d ${months[$mon]} в $formatted_time${NC}"
+        echo -e "${GREEN}Ежегодно $d ${months[$((10#$mon))]} в $formatted_time${NC}"
 
     # 7. Каждые X часов (например, 0 */12 * * *)
     elif [[ "$h" == */* && "$m" =~ ^[0-9]+$ && "$d" == "*" && "$mon" == "*" && "$dow" == "*" ]]; then
@@ -319,6 +348,54 @@ function warp_cli {
     printf '%s\n' "$output"
 }
 
+# registration show is the readiness probe: only a known response may authorize
+# an initial registration. Never include CLI output (which may contain IDs) in UI.
+function warp_registration_state {
+    local output rc=0 code
+    output=$(warp_cli registration show 2>&1) || rc=$?
+    if jq -e 'type == "object" and (.code | type == "string")' \
+        <<< "$output" >/dev/null 2>&1; then
+        code=$(jq -r '.code' <<< "$output")
+        case "$code" in
+            MissingRegistration) echo missing ;;
+            FailedToConnectToDaemon) echo daemon-unavailable ;;
+            *) echo unknown ;;
+        esac
+    elif [ "$rc" -eq 0 ]; then
+        if jq -e 'type == "object" and (has("code") | not) and
+            ((.id | type == "string" and length > 0) or
+             (.registration_id | type == "string" and length > 0))' \
+            <<< "$output" >/dev/null 2>&1; then
+            echo present
+        else
+            echo unknown
+        fi
+    elif [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+        echo daemon-unavailable
+    else
+        # Narrow compatibility fallback for older non-JSON CLI output.
+        case "$output" in
+            'No registration'|'Registration missing'|'Not registered') echo missing ;;
+            *) echo unknown ;;
+        esac
+    fi
+}
+
+function wait_warp_registration_state {
+    local attempt state
+    for ((attempt=0; attempt<5; attempt++)); do
+        state=$(warp_registration_state)
+        case "$state" in
+            present|missing) printf '%s\n' "$state"; return 0 ;;
+            daemon-unavailable)
+                if [ "$attempt" -lt 4 ]; then sleep 2; fi ;;
+            *) echo 'Неизвестный ответ WARP CLI; проверьте warp-cli status и journalctl -u warp-svc.' >&2; return 1 ;;
+        esac
+    done
+    echo 'WARP daemon недоступен через CLI; проверьте systemctl status warp-svc и journalctl -u warp-svc.' >&2
+    return 1
+}
+
 function warp_auto_schema_known {
     # В settings/sources контракте Option override отсутствует в обеих картах для AUTO.
     # При иной структуре или неизвестном endpoint-поле не предполагаем AUTO.
@@ -341,7 +418,12 @@ function read_warp_state {
         (.operation_mode | type == "string") and
         (.always_on | type == "boolean") and
         (.warp_tunnel_protocol == "masque" or .warp_tunnel_protocol == "wireguard") and
-        (.proxy_port | type == "number" and . >= 1 and . <= 65535 and floor == .) and
+        (if .operation_mode == "proxy" then
+            (.proxy_port | type == "number" and . >= 1 and . <= 65535 and floor == .)
+         else
+            ((has("proxy_port") | not) or
+             (.proxy_port | type == "number" and . >= 1 and . <= 65535 and floor == .))
+         end) and
         ((has("override_warp_endpoint") | not) or
           (.override_warp_endpoint | type == "string" and length > 0))' \
         <<< "$warp_settings" >/dev/null || return 1
@@ -354,18 +436,50 @@ function read_warp_state {
     else
         warp_endpoint=UNKNOWN
     fi
-    warp_port=$(jq -r '.settings.proxy_port' <<< "$warp_settings")
+    warp_port=$(jq -r '.settings.proxy_port // empty' <<< "$warp_settings")
     warp_status=$(warp_cli status | jq -er '.status | select(type == "string")') || return 1
 }
 
 function show_warp_connection {
-    if read_warp_state; then
+    local registration_state package_state='не подтверждён'
+    if command -v dpkg-query >/dev/null 2>&1; then
+        package_state='не установлен'
+        if dpkg-query -W -f='${Status}' cloudflare-warp 2>/dev/null |
+            grep -qx 'install ok installed'; then
+            package_state='установлен'
+        fi
+    fi
+    printf '📦 Пакет WARP: %s\n' "$package_state"
+    if ! command -v warp-cli >/dev/null 2>&1; then
+        echo '⚙️ warp-svc: не проверен'
+        echo '🔌 CLI/daemon: недоступен'
+        echo '🪪 Регистрация: не определена'
+        echo '🔗 Туннель / SOCKS5: не определены'
+        return
+    fi
+    printf '⚙️ warp-svc: %s\n' "$(get_warp_status)"
+    if ! systemctl is-active --quiet warp-svc; then
+        echo '🔌 CLI/daemon: не проверен (служба остановлена)'
+        echo '🪪 Регистрация: не определена'
+        echo '🔗 Туннель / SOCKS5: не определены'
+        return
+    fi
+    registration_state=$(warp_registration_state)
+    case "$registration_state" in
+        present) echo '🔌 CLI/daemon: доступен'; echo '🪪 Регистрация: есть' ;;
+        missing) echo '🔌 CLI/daemon: доступен'; echo '🪪 Регистрация: отсутствует' ;;
+        daemon-unavailable) echo '🔌 CLI/daemon: недоступен'; echo '🪪 Регистрация: не определена' ;;
+        *) echo '🔌 CLI/daemon: ответ не распознан'; echo '🪪 Регистрация: не определена' ;;
+    esac
+    if [ "$registration_state" = present ] && read_warp_state 2>/dev/null; then
         local endpoint_display="$warp_endpoint"
         [ "$endpoint_display" != UNKNOWN ] || endpoint_display="UNKNOWN (неизвестная схема override)"
         local transport='не подтверждён (нужен подключённый MASQUE/QUIC)'
         if get_warp_scan_profile quiet; then transport='MASQUE / QUIC'; fi
         printf '🔗 Туннель: %s\n🌐 Transport: %s\n🎯 Endpoint: %s\n🔌 SOCKS5: 127.0.0.1:%s (mode: %s)\n' \
             "$warp_status" "$transport" "$endpoint_display" "$warp_port" "$warp_mode"
+        check_warp_health quiet 2>/dev/null || true
+        printf '❤️ WARP: %s — %s\n' "$warp_health" "$warp_health_detail"
     else
         echo -e "${YELLOW}🔗 Туннель / Протокол / Endpoint / SOCKS5: не определены${NC}"
     fi
@@ -385,7 +499,7 @@ function check_warp_health {
             if [ -n "$expected_port" ] && [ "$warp_port" != "$expected_port" ]; then
                 warp_health_detail="SOCKS5 port: $warp_port; требуется: $expected_port"
             elif [ "$warp_status" = Connected ] && [ "$warp_mode" = proxy ]; then
-                warp_health_detail="SOCKS5 listener 127.0.0.1:$warp_port отсутствует (нужен ss)"
+                warp_health_detail="SOCKS5 listener 127.0.0.1:$warp_port отсутствует или порт открыт публично"
                 if ! command -v ss >/dev/null 2>&1; then
                     warp_health=DEGRADED
                     warp_health_detail="Нужен ss для проверки SOCKS5 listener"
@@ -556,9 +670,10 @@ function apply_warp_change() (
     done
     exec 9>>"${WARP_LOCK_FILE:-/run/lock/vps-server-menu-warp.lock}" || return 1
     flock -n 9 || { echo "Другое меню уже меняет настройки WARP."; return 1; }
-    read_warp_state && [ "$warp_mode" = proxy ] || {
-        echo -e "${RED}Нужен активный warp-svc с известным JSON state и mode proxy.${NC}"; return 1;
-    }
+    if ! read_warp_state || [ "$warp_mode" != proxy ]; then
+        echo -e "${RED}Нужен активный warp-svc с известным JSON state и mode proxy.${NC}"
+        return 1
+    fi
     if [ "$warp_endpoint" = UNKNOWN ]; then
         echo "Текущий endpoint/AUTO в этой версии CLI не подтверждён; безопасный rollback невозможен."
         return 1
@@ -699,9 +814,10 @@ function scan_official_warp_candidate {
 
 function generate_warp_xray_outbound {
     local warp_settings warp_status warp_protocol warp_endpoint warp_port warp_mode
-    read_warp_state && [ "$warp_mode" = proxy ] || {
-        echo 'Нужен WARP в proxy mode с известным SOCKS5 портом.' >&2; return 1;
-    }
+    if ! read_warp_state || [ "$warp_mode" != proxy ]; then
+        echo 'Нужен WARP в proxy mode с известным SOCKS5 портом.' >&2
+        return 1
+    fi
     jq -Mn --argjson port "$warp_port" '{tag:"warp-outbound",protocol:"socks",
         settings:{servers:[{address:"127.0.0.1",port:$port,users:[]}]}}'
 }
@@ -717,7 +833,10 @@ function optimize_warp_endpoint {
     local warpscout_account="$warpscout_dir/warpscout-account.json" answer result_dir warp_scan_sni
     case "$mode" in speed|latency) ;; *) return 1 ;; esac
     local warp_settings warp_status warp_protocol warp_endpoint warp_port warp_mode
-    read_warp_state && [ "$warp_mode" = proxy ] || { echo "Нужен активный WARP в mode proxy."; return 1; }
+    if ! read_warp_state || [ "$warp_mode" != proxy ]; then
+        echo "Нужен активный WARP в mode proxy."
+        return 1
+    fi
     if [ "$warp_protocol" != masque ]; then
         echo "Текущий протокол SOCKS5 proxy не поддерживается; для поиска нужен MASQUE/QUIC."
         return 1
@@ -752,7 +871,6 @@ function run_warp_endpoint_menu {
     while true; do
         clear
         echo -e "${CYAN}--- 🎯 WARP ENDPOINT MANAGER / WARPSCOUT ---------------${NC}"
-        echo -e "📦 Служба: $(get_warp_status)"
         show_warp_connection
         show_warpscout_status
         echo -e "${BLUE}------------------------------------------------------${NC}"
@@ -795,21 +913,21 @@ function offer_warp_endpoint_recovery {
 }
 
 function install_official_warp() (
-    local requested_port="${1:-40000}" noninteractive="${2:-0}" key_file='' codename attempt
-    local registration_output='' registration_rc=0 registration_missing=0 status_output='' current_status=''
+    local requested_port="${1:-40000}" noninteractive="${2:-0}" key_file='' codename
+    local registration_state status_output current_status
+    local warp_settings warp_status warp_protocol warp_endpoint warp_port warp_mode
     if ! [[ "$requested_port" =~ ^[0-9]{1,5}$ ]] ||
         [ "$((10#$requested_port))" -lt 1 ] || [ "$((10#$requested_port))" -gt 65535 ]; then
         echo "Нужен SOCKS5 порт 1–65535." >&2
         return 64
     fi
-    if command -v warp-cli >/dev/null 2>&1 && [ "$noninteractive" -eq 0 ]; then
-        echo -e "${YELLOW}WARP уже установлен.${NC}"
-        check_warp_health
-        return "$?"
-    fi
     export WARP_HEALTH_EXPECTED_PORT="$requested_port"
-    if command -v warp-cli >/dev/null 2>&1 && check_warp_health quiet; then
-        echo "WARP already HEALTHY; configuration unchanged." >&2
+    if command -v warp-cli >/dev/null 2>&1 && check_warp_health quiet 2>/dev/null; then
+        if [ "$noninteractive" -eq 1 ]; then
+            echo "WARP already HEALTHY; configuration unchanged." >&2
+        else
+            print_warp_health
+        fi
         return 0
     fi
     trap '[ -z "$key_file" ] || rm -f -- "$key_file"' EXIT
@@ -822,7 +940,11 @@ function install_official_warp() (
                     --no-install-recommends curl gpg ca-certificates || return 1
         fi
         key_file=$(mktemp) || return 1
-        codename=$(lsb_release -cs) || return 1
+        codename=$(. /etc/os-release; printf '%s' "${VERSION_CODENAME:-}") || return 1
+        if ! [[ "$codename" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo 'Не удалось определить поддерживаемый codename системы.' >&2
+            return 1
+        fi
         curl -fSL --connect-timeout 15 --max-time 120 https://pkg.cloudflareclient.com/pubkey.gpg -o "$key_file" &&
             gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg "$key_file" || return 1
         chmod 644 /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg || return 1
@@ -839,31 +961,20 @@ function install_official_warp() (
     if ! systemctl is-active --quiet warp-svc; then
         systemctl start warp-svc || return 1
     fi
-    for ((attempt=0; attempt<10; attempt++)); do
-        if warp_cli settings >/dev/null; then break; fi
-        sleep 2
-    done
-    registration_output=$(warp_cli registration show 2>&1) || registration_rc=$?
-    if [ "$registration_rc" -ne 0 ]; then
-        if ! grep -Eiq '(^|[^a-z])(no registration|registration (not found|missing)|not registered)([^a-z]|$)' <<< "$registration_output"; then
-            printf 'Не удалось проверить регистрацию WARP: %s\n' "$registration_output" >&2
+    registration_state=$(wait_warp_registration_state) || return 1
+    if [ "$registration_state" = missing ]; then
+        # Cloudflare's initial sequence registers before configuring or connecting.
+        if ! warp_cli registration new >/dev/null 2>&1; then
+            echo 'Не удалось создать регистрацию WARP; проверьте warp-cli status и journalctl -u warp-svc.' >&2
             return 1
         fi
-        registration_missing=1
+        registration_state=$(wait_warp_registration_state) || return 1
+        if [ "$registration_state" != present ]; then
+            echo 'Создание регистрации WARP не подтверждено; настройки не изменены.' >&2
+            return 1
+        fi
     fi
-    if [ "$registration_missing" -eq 1 ]; then
-        warp_settings=$(warp_cli settings) || return 1
-        if ! jq -e '.settings | type == "object" and
-            (.operation_mode | type == "string") and
-            (.proxy_port | type == "number" and . >= 1 and . <= 65535 and floor == .)' \
-            <<< "$warp_settings" >/dev/null; then
-            echo "Неизвестная схема настроек WARP; изменения остановлены." >&2
-            return 1
-        fi
-        warp_mode=$(jq -r '.settings.operation_mode' <<< "$warp_settings")
-        warp_port=$(jq -r '.settings.proxy_port' <<< "$warp_settings")
-        warp_status=Disconnected
-    elif ! read_warp_state; then
+    if ! read_warp_state 2>/dev/null; then
         echo "Невозможно достоверно прочитать настройки WARP; изменения остановлены." >&2
         return 1
     fi
@@ -879,10 +990,7 @@ function install_official_warp() (
             warp_cli proxy port "$requested_port" >/dev/null || return 1
         fi
     fi
-    if [ "$registration_missing" -eq 1 ]; then
-        warp_cli registration new >/dev/null || return 1
-    fi
-    status_output=$(warp_cli status) || return 1
+    status_output=$(warp_cli status 2>/dev/null) || return 1
     current_status=$(jq -er '.status | select(type == "string")' <<< "$status_output") || return 1
     if [ "$current_status" != Connected ] && ! warp_cli connect >/dev/null; then
         echo -e "${RED}WARP установлен, но connect не завершён.${NC}"
@@ -897,7 +1005,6 @@ function install_official_warp() (
         echo -e "${YELLOW}WARP установлен, но tunnel/proxy health check не пройден.${NC}"
         # WARPSCOUT remains a manual Endpoint Manager action. AUTO health
         # failures are never followed by an unsolicited scanner run.
-        [ "$noninteractive" -eq 1 ] && return 1
         echo "Откройте Endpoint Manager вручную, если требуется диагностика endpoint."
         return 1
     fi
@@ -976,12 +1083,12 @@ function run_warp_cli_api {
 }
 
 function run_warp_menu {
+    local choice new_port conf
     while true; do
         clear
         echo -e "${CYAN}======================================================${NC}"
         echo -e "${CYAN}             ☁️  УПРАВЛЕНИЕ CLOUDFLARE WARP ☁️             ${NC}"
         echo -e "${CYAN}======================================================${NC}"
-        echo -e "📦 Служба:        $(get_warp_status)"
         show_warp_connection
         echo -e "🔄 Авторестарт:   $(get_warp_cron_status)"
         echo -e "${BLUE}------------------------------------------------------${NC}"
@@ -1038,11 +1145,11 @@ function run_warp_menu {
                     if DEBIAN_FRONTEND=noninteractive apt-get purge -y cloudflare-warp >/dev/null 2>&1; then
                         rm -f /etc/apt/sources.list.d/cloudflare-client.list
                         rm -f /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-                        crontab -l 2>/dev/null | grep -v "warp-svc" | crontab -
+                        update_warp_cron_rule '' || true
                         hash -r 
                         echo -e "${GREEN}✅ WARP полностью удален из системы.${NC}"
                     else
-                        echo -e "${RED}❌ Ошибка! APT заблокирован.${NC}"
+                        echo -e "${RED}❌ Не удалось удалить пакет WARP через APT. Проверьте состояние apt/dpkg.${NC}"
                     fi
                 fi
                 read -p "Нажмите Enter..." ;;

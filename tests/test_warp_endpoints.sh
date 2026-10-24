@@ -30,6 +30,9 @@ if name == 'flock':
     sys.exit(0)
 if name == 'systemctl':
     sys.exit(int(s.get('service_down', False)) if 'is-active' in args else 0)
+if name == 'dpkg-query':
+    print('install ok installed')
+    sys.exit(0)
 if name == 'ss':
     if s.get('ss_fail'):
         sys.exit(1)
@@ -61,6 +64,15 @@ args = [a for a in args if a not in ('--accept-tos', '--json')]
 if '--help' in args:
     sys.exit(1 if s.get('no_capabilities') else 0)
 cfg = s['settings']
+if args in (['settings'], ['status'], ['registration', 'show']):
+    failures = s.get('daemon_failures_remaining', 0)
+    if failures:
+        s['daemon_failures_remaining'] = failures - 1
+        p.write_text(json.dumps(s))
+    if failures or s.get('daemon_unavailable'):
+        print(json.dumps({'code':'FailedToConnectToDaemon',
+                          'error':'No such file or directory (os error 2)'}), file=sys.stderr)
+        sys.exit(1)
 if args == ['tunnel', 'stats']:
     if s.get('no_stats'):
         sys.exit(1)
@@ -77,15 +89,26 @@ if args == ['status']:
     print(json.dumps({'status': 'Connected' if cfg['always_on'] and not s.get('registration_missing') else 'Disconnected'}))
     sys.exit(0)
 if args == ['registration', 'show']:
+    if s.get('registration_error_code'):
+        print(json.dumps({'code':s['registration_error_code'], 'error':'unexpected registration error'}), file=sys.stderr)
+        sys.exit(1)
     if s.get('registration_error'):
         print('temporary daemon error', file=sys.stderr)
         sys.exit(1)
     if s.get('registration_missing'):
-        print('No registration', file=sys.stderr)
-        sys.exit(1)
+        if s.get('legacy_missing'):
+            print('No registration', file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps({'code':'MissingRegistration',
+                          'error':'Missing registration. Try running: "warp-cli registration new"'}),
+              file=sys.stdout if s.get('registration_error_zero_exit') else sys.stderr)
+        sys.exit(0 if s.get('registration_error_zero_exit') else 1)
     print(json.dumps({'id': 'existing-registration'}))
     sys.exit(0)
 if args == ['registration', 'new']:
+    if s.get('registration_new_fail'):
+        print(json.dumps({'code':'RegistrationFailed', 'error':'registration failed'}), file=sys.stderr)
+        sys.exit(1)
     s['registration_missing'] = False
     p.write_text(json.dumps(s))
     print(json.dumps({'status': 'Success'}))
@@ -101,10 +124,16 @@ elif args == ['connect']:
         sys.exit(1)
     cfg['always_on'] = True
 elif args[:1] == ['mode']:
+    if s.get('registration_missing'):
+        print(json.dumps({'code':'MissingRegistration', 'error':'register first'}), file=sys.stderr)
+        sys.exit(1)
     if s.get('mode_fail'):
         sys.exit(1)
     cfg['operation_mode'] = args[1]
 elif args[:2] == ['proxy', 'port']:
+    if s.get('registration_missing'):
+        print(json.dumps({'code':'MissingRegistration', 'error':'register first'}), file=sys.stderr)
+        sys.exit(1)
     if s.get('port_fail'):
         sys.exit(1)
     cfg['proxy_port'] = int(args[2])
@@ -122,7 +151,7 @@ p.write_text(json.dumps(s))
 print(json.dumps({'status': 'Success'}))
 PY
 chmod +x "$work/bin/mock"
-for name in warp-cli systemctl timeout ss curl sleep warpscout flock; do ln -s mock "$work/bin/$name"; done
+for name in warp-cli systemctl dpkg-query timeout ss curl sleep warpscout flock; do ln -s mock "$work/bin/$name"; done
 export PATH="$work/bin:$PATH"
 # Functions and globals are loaded from the canonical script without starting its menu.
 # shellcheck disable=SC1091
@@ -144,6 +173,21 @@ flag() {
 import json, pathlib, sys
 p=pathlib.Path(sys.argv[1]); s=json.loads(p.read_text()); s[sys.argv[2]]=json.loads(sys.argv[3]); p.write_text(json.dumps(s))
 PY
+}
+assert_no_registration_new() {
+    python3 - "$work/calls.jsonl" <<'PY'
+import json, pathlib, sys
+calls=[json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+assert not any(call[0]=='warp-cli' and call[-2:]==['registration','new'] for call in calls)
+PY
+}
+assert_install_failure() {
+    local expected_status="$1"
+    jq -e --arg status "$expected_status" \
+        '.status == $status and .operation.success == false and .operation.exitCode != 0' \
+        "$work/result.json" >/dev/null
+    test "$(wc -l < "$work/result.json")" -eq 1
+    test -s "$work/stderr"
 }
 settings() { jq -Sc '.settings' "$work/state.json"; }
 assert_health() {
@@ -244,7 +288,7 @@ if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/
 fi
 jq -e '.operation.success == false and .operation.exitCode != 0' "$work/result.json" >/dev/null
 test -s "$work/stderr"
-if rg 'registration.*new' "$work/calls.jsonl"; then echo 'unexpected registration' >&2; exit 1; fi
+if grep -E 'registration.*new' "$work/calls.jsonl"; then echo 'unexpected registration' >&2; exit 1; fi
 reset_state
 flag trace_off true
 if run_warp_cli_api install --port 45678 --json > "$work/result.json" 2> "$work/stderr"; then
@@ -265,8 +309,140 @@ run_warp_cli_api install --port 40000 >/dev/null
 python3 - "$work/calls.jsonl" <<'PYCLI'
 import json,pathlib,sys
 calls=[json.loads(x) for x in pathlib.Path(sys.argv[1]).read_text().splitlines()]
-assert any(c[0]=='warp-cli' and c[-2:]==['registration','new'] for c in calls)
+commands=[c[1:] for c in calls if c[0]=='warp-cli']
+commands=[[x for x in c if x not in ('--accept-tos','--json')] for c in commands]
+assert ['registration','new'] in commands
+assert commands.index(['registration','new']) < commands.index(['proxy','port','40000'])
 PYCLI
+test "$(jq -r '.registration_missing' "$work/state.json")" = false
+test "$(jq -r '.settings.proxy_port' "$work/state.json")" = 40000
+assert_health HEALTHY
+
+# A fresh 2026 CLI omits proxy_port until proxy mode is configured.
+reset_state
+python3 - "$work/state.json" <<'PYCLI'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+state = json.loads(p.read_text())
+state['settings']['operation_mode'] = 'warp'
+state['settings']['always_on'] = False
+del state['settings']['proxy_port']
+state['registration_missing'] = True
+p.write_text(json.dumps(state))
+PYCLI
+run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"
+jq -e '.status == "HEALTHY" and .operation.success == true and .port == 40000' "$work/result.json" >/dev/null
+test "$(jq -r '.settings.operation_mode' "$work/state.json")" = proxy
+test "$(jq -r '.settings.proxy_port' "$work/state.json")" = 40000
+assert_health HEALTHY
+
+# An absent port remains invalid when CLI claims it is already in proxy mode.
+reset_state
+python3 - "$work/state.json" <<'PYCLI'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+state = json.loads(p.read_text())
+del state['settings']['proxy_port']
+p.write_text(json.dumps(state))
+PYCLI
+assert_health DEGRADED
+
+# A JSON error remains an error even if a CLI release returns exit status zero.
+reset_state
+flag registration_missing true
+flag registration_error_zero_exit true
+run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"
+jq -e '.status == "HEALTHY" and .operation.success == true' "$work/result.json" >/dev/null
+assert_health HEALTHY
+
+# The old text response remains a deliberately narrow compatibility fallback.
+reset_state
+flag registration_missing true
+flag legacy_missing true
+run_warp_cli_api install --port 40000 >/dev/null
+assert_health HEALTHY
+
+# An installed but unregistered client must be repairable from the menu path.
+reset_state
+flag registration_missing true
+install_official_warp 40000 0 > "$work/interactive-output" 2> "$work/stderr"
+test "$(jq -r '.registration_missing' "$work/state.json")" = false
+assert_health HEALTHY
+
+# A running systemd unit is not evidence that CLI IPC works. A transient
+# daemon failure is retried, while a persistent one stops without registration.
+reset_state
+WARP_MISSING=warp-cli show_warp_connection > "$work/diagnostics"
+grep -Eq 'Пакет WARP: установлен' "$work/diagnostics"
+grep -Eq 'CLI/daemon: недоступен' "$work/diagnostics"
+flag daemon_unavailable true
+show_warp_connection > "$work/diagnostics" 2> "$work/stderr"
+grep -Eq 'Пакет WARP: установлен' "$work/diagnostics"
+grep -Eq 'CLI/daemon: недоступен' "$work/diagnostics"
+grep -Eq 'Регистрация: не определена' "$work/diagnostics"
+if grep -Eq 'РАБОТАЕТ|HEALTHY' "$work/diagnostics"; then
+    echo 'Daemon failure shown as healthy' >&2; exit 1
+fi
+if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Unreachable daemon accepted' >&2; exit 1
+fi
+assert_install_failure DEGRADED
+grep -Eq 'WARP daemon недоступен' "$work/stderr"
+assert_no_registration_new
+reset_state
+flag daemon_failures_remaining 3
+run_warp_cli_api install --port 45678 --json > "$work/result.json" 2> "$work/stderr"
+jq -e '.status == "HEALTHY" and .operation.success == true' "$work/result.json" >/dev/null
+assert_no_registration_new
+
+# Unknown JSON errors and a failed registration never authorize config changes.
+reset_state
+flag registration_error_code '"FutureRegistrationError"'
+if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Unknown registration error accepted' >&2; exit 1
+fi
+assert_install_failure DOWN
+assert_no_registration_new
+test "$(jq -r '.settings.proxy_port' "$work/state.json")" = 45678
+reset_state
+flag registration_missing true
+flag registration_new_fail true
+if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Failed registration accepted' >&2; exit 1
+fi
+assert_install_failure DOWN
+test "$(jq -r '.settings.proxy_port' "$work/state.json")" = 45678
+
+# Configuration and connect failures must propagate through the original API.
+reset_state
+python3 - "$work/state.json" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); s=json.loads(p.read_text())
+s['settings']['operation_mode']='warp'; s['mode_fail']=True
+p.write_text(json.dumps(s))
+PY
+if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Failed mode change accepted' >&2; exit 1
+fi
+assert_install_failure DOWN
+reset_state
+flag port_fail true
+if run_warp_cli_api install --port 40000 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Failed port change accepted' >&2; exit 1
+fi
+assert_install_failure DOWN
+reset_state
+flag connect_fail true
+python3 - "$work/state.json" <<'PY'
+import json,pathlib,sys
+p=pathlib.Path(sys.argv[1]); s=json.loads(p.read_text())
+s['settings']['always_on']=False
+p.write_text(json.dumps(s))
+PY
+if run_warp_cli_api install --port 45678 --json > "$work/result.json" 2> "$work/stderr"; then
+    echo 'Failed connect accepted' >&2; exit 1
+fi
+assert_install_failure DOWN
 for endpoint in '192.0.2.1:443' '[2001:db8::1]:1701' '[::ffff:192.0.2.1]:443'; do validate_warp_endpoint "$endpoint"; done
 test "$(normalize_warp_endpoint '[2001:0DB8::1]:00443')" = '[2001:db8::1]:443'
 for endpoint in '1.2.3.999:443' 'example.com:443' '[1.2.3.4]:443' '::1:443' '[:::1]:443' '1.2.3.4:0' '1.2.3.4:65536' '1.2.3.4:443;id' '1.2.3.4:٤٤٣' $'1.2.3.4:443\n127.0.0.1:22'; do
