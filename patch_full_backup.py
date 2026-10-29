@@ -23,7 +23,7 @@ if [ -d "/opt/remnawave-admin" ]; then
         BOT_PG_DB=$(grep -E '^POSTGRES_DB=' /opt/remnawave-admin/.env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
         BOT_PG_USER=${BOT_PG_USER:-postgres}
         BOT_PG_DB=${BOT_PG_DB:-remnawave_bot}
-        if docker exec -t remnawave-admin-db pg_dump -c -U "$BOT_PG_USER" "$BOT_PG_DB" 2>/dev/null | gzip -6 > "$temp_backup_dir/remnawave-admin/admin-bot-db.sql.gz"; then
+        if docker exec remnawave-admin-db pg_dump -c -U "$BOT_PG_USER" "$BOT_PG_DB" 2>/dev/null | gzip -6 > "$temp_backup_dir/remnawave-admin/admin-bot-db.sql.gz"; then
             log_message "  ✓ Case211 Admin Bot database & configs backed up successfully"
         else
             log_message "  WARNING: Failed to dump Case211 database"
@@ -106,7 +106,7 @@ if [ -d "$BACKUP_DIR/remnawave-admin" ]; then
     if [ -f "$BACKUP_DIR/remnawave-admin/admin-bot-db.sql.gz" ]; then
         BOT_PG_USER=$(grep -E '^POSTGRES_USER=' /opt/remnawave-admin/.env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
         BOT_PG_DB=$(grep -E '^POSTGRES_DB=' /opt/remnawave-admin/.env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
-        gunzip -c "$BACKUP_DIR/remnawave-admin/admin-bot-db.sql.gz" | docker exec -i remnawave-admin-db psql -U "${BOT_PG_USER:-postgres}" -d "${BOT_PG_DB:-remnawave_bot}" >/dev/null 2>&1 || true
+        gunzip -c "$BACKUP_DIR/remnawave-admin/admin-bot-db.sql.gz" | tr -d '\r' | docker exec -i remnawave-admin-db psql -U "${BOT_PG_USER:-postgres}" -d "${BOT_PG_DB:-remnawave_bot}" >/dev/null 2>&1 || true
     fi
     docker compose up -d
     echo "   ✓ Админ-бот Case211 и его БД полностью восстановлены"
