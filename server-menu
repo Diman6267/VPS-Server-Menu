@@ -100,16 +100,14 @@ fi
     TCP_CC=$(sysctl net.ipv4.tcp_congestion_control | awk '{print $3}')
 
     # NETWORK & GEO 
-    IPV4=$(curl -s4 ipinfo.io/ip 2>/dev/null || echo -e "${RED}✗ Offline${NC}")
+    IPV4=$(curl -s4 --max-time 3 ipinfo.io/ip 2>/dev/null || echo -e "${RED}✗ Offline${NC}")
     IPV6=$(get_public_ipv6)
-    GEO_DATA=$(curl -s "http://ip-api.com/json/$IPV4?lang=ru&fields=status,message,country,regionName,city,isp,org,as")
-    COUNTRY=$(echo "$GEO_DATA" | jq -r '.country' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"country":"\K[^"]+')
-    LOC=$(echo "$GEO_DATA" | jq -r '.city' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"city":"\K[^"]+')
-    REG=$(echo "$GEO_DATA" | jq -r '.regionName' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"regionName":"\K[^"]+')
-    ORG=$(echo "$GEO_DATA" | jq -r '.org' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"org":"\K[^"]+')
-    if [ -z "$ORG" ] || [ "$ORG" == "null" ]; then
-        ORG=$(echo "$GEO_DATA" | jq -r '.isp' 2>/dev/null || echo "$GEO_DATA" | grep -oP '"isp":"\K[^"]+')
-    fi
+    GEO_DATA=$(curl -s --max-time 4 https://ipinfo.io/json 2>/dev/null)
+    COUNTRY=$(echo "$GEO_DATA" | jq -r '.country // empty' 2>/dev/null)
+    LOC=$(echo "$GEO_DATA" | jq -r '.city // empty' 2>/dev/null)
+    REG=$(echo "$GEO_DATA" | jq -r '.region // empty' 2>/dev/null)
+    ORG=$(echo "$GEO_DATA" | jq -r '.org // empty' 2>/dev/null)
+    : "${COUNTRY:=н/д}" "${LOC:=н/д}" "${REG:=н/д}" "${ORG:=н/д}"
     # --- ВЫВОД МЕНЮ В СТИЛЕ BENCH.SH ---
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " 💻  Модель процессора   : ${YELLOW}$CPU_MODEL${NC}"
